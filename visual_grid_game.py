@@ -35,6 +35,20 @@ class VisualGridHuntGame:
             if tuple(op_pos) != (0, 0) and tuple(op_pos) not in self.walls and tuple(op_pos) not in self.food_positions:
                 self.opponents.append(op_pos)
 
+        # Step 2.1: Declare toxic trap set - avoiding (0,0), walls, and food
+        self.toxic_traps = set()
+        trap_candidates = [
+            (tx, ty)
+            for tx in range(self.width)
+            for ty in range(self.height)
+            if (tx, ty) != (0, 0)
+            and (tx, ty) not in self.walls
+            and (tx, ty) not in self.food_positions
+        ]
+        # Place 3 toxic traps randomly from valid candidates
+        for pos in random.sample(trap_candidates, min(3, len(trap_candidates))):
+            self.toxic_traps.add(pos)
+
         self.score = 0
         self.steps = 0
         self.collision = False
@@ -47,7 +61,9 @@ class VisualGridHuntGame:
             'hit_wall': tuple(self.agent_pos) in self.walls,
             'collision': self.collision,
             'score': self.score,
-            'remaining_food': len(self.food_positions)
+            'remaining_food': len(self.food_positions),
+            # Step 2.2: New sensor - True if agent is adjacent to or on a toxic trap
+            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps
         }
 
     def execute_action(self, action: str):
@@ -72,6 +88,10 @@ class VisualGridHuntGame:
         if tuple_pos in self.food_positions:
             self.food_positions.remove(tuple_pos)
             self.score += 20
+
+        # Step 2.3: Check if agent stepped on a toxic trap
+        if tuple_pos in self.toxic_traps:
+            self.score -= 15
 
         for op in self.opponents:
             move = random.choice(['Up', 'Down', 'Left', 'Right', 'Stay'])
@@ -145,6 +165,19 @@ class GridGameGUI:
             y1 = (self.env.height - 1 - fy) * self.cell_size + offset
             self.canvas.create_oval(x1, y1, x1 + self.cell_size * 0.5, y1 + self.cell_size * 0.5, fill="#f59e0b",
                                     outline="#d97706")
+
+        # Step 2.3: Render toxic traps as purple diamonds
+        for tx, ty in self.env.toxic_traps:
+            cx = tx * self.cell_size + self.cell_size / 2
+            cy = (self.env.height - 1 - ty) * self.cell_size + self.cell_size / 2
+            r = self.cell_size * 0.35
+            self.canvas.create_polygon(
+                cx, cy - r,       # top
+                cx + r, cy,       # right
+                cx, cy + r,       # bottom
+                cx - r, cy,       # left
+                fill="#7c3aed", outline="#4c1d95", width=2
+            )
 
         for ox, oy in self.env.opponents:
             offset = self.cell_size * 0.2
