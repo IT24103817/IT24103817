@@ -35,6 +35,16 @@ class VisualGridHuntGame:
             if tuple(op_pos) != (0, 0) and tuple(op_pos) not in self.walls and tuple(op_pos) not in self.food_positions:
                 self.opponents.append(op_pos)
 
+        # Generate toxic traps at positions that do not overlap with the agent start, walls, or food.
+        self.toxic_traps = set()
+        trap_target = min(5, max(1, (self.width * self.height) // 12))
+        while len(self.toxic_traps) < trap_target:
+            tx = random.randint(0, self.width - 1)
+            ty = random.randint(0, self.height - 1)
+            trap_pos = (tx, ty)
+            if trap_pos != (0, 0) and trap_pos not in self.walls and trap_pos not in self.food_positions and trap_pos not in {tuple(op) for op in self.opponents}:
+                self.toxic_traps.add(trap_pos)
+
         self.score = 0
         self.steps = 0
         self.collision = False
@@ -45,6 +55,7 @@ class VisualGridHuntGame:
             'opponent_positions': [list(op) for op in self.opponents],
             'smells_food': tuple(self.agent_pos) in self.food_positions,
             'hit_wall': tuple(self.agent_pos) in self.walls,
+            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps,
             'collision': self.collision,
             'score': self.score,
             'remaining_food': len(self.food_positions)
@@ -69,6 +80,9 @@ class VisualGridHuntGame:
             self.agent_pos = new_pos
 
         tuple_pos = tuple(self.agent_pos)
+        if tuple_pos in self.toxic_traps:
+            self.score -= 15
+
         if tuple_pos in self.food_positions:
             self.food_positions.remove(tuple_pos)
             self.score += 20
@@ -138,6 +152,14 @@ class GridGameGUI:
                 if self.cell_size >= 40 and (x, y) in self.env.walls:
                     self.canvas.create_text(x1 + self.cell_size / 2, y1 + self.cell_size / 2, text="W", fill="white",
                                             font=("Arial", 8, "bold"))
+
+        for trap in self.env.toxic_traps:
+            x, y = trap
+            x1 = x * self.cell_size
+            y1 = (self.env.height - 1 - y) * self.cell_size
+            x2 = x1 + self.cell_size
+            y2 = y1 + self.cell_size
+            self.canvas.create_rectangle(x1, y1, x2, y2, fill="purple", outline="#7c3aed")
 
         for fx, fy in self.env.food_positions:
             offset = self.cell_size * 0.25
