@@ -57,7 +57,7 @@ class VisualGridHuntGame:
             'hit_wall': tuple(self.agent_pos) in self.walls,
             'collision': self.collision,
             'score': self.score,
-            'remaining_food': len(self.food_positions),,
+            'remaining_food': len(self.food_positions),
             'smells_toxin': tuple(self.agent_pos) in self.toxic_traps
         }
 
@@ -83,7 +83,9 @@ class VisualGridHuntGame:
         if tuple_pos in self.food_positions:
             self.food_positions.remove(tuple_pos)
             self.score += 20
-
+        if tuple_pos in self.toxic_traps:
+            self.score -= 15
+            
         for op in self.opponents:
             move = random.choice(['Up', 'Down', 'Left', 'Right', 'Stay'])
             if move == 'Up' and op[1] < self.height - 1:
