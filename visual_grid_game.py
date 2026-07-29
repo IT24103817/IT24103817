@@ -26,6 +26,21 @@ class VisualGridHuntGame:
             if pos_tuple != (0, 0) and pos_tuple not in self.walls:
                 self.food_positions.add(pos_tuple)
 
+        #Lab 1 - Step 2.1: Generate toxic traps
+        self.toxic_traps = set()
+
+        while len(self.toxic_traps) < 5:   # Create 5 traps
+            tx = random.randint(0, self.width - 1)
+            ty = random.randint(0, self.height - 1)
+            trap = (tx, ty)
+
+            if (
+                trap != (0, 0)
+                and trap not in self.walls
+                and trap not in self.food_positions
+            ):
+                self.toxic_traps.add(trap)
+                
         # Generate adversarial opponents
         self.opponents = []
         while len(self.opponents) < num_opponents:
@@ -44,6 +59,7 @@ class VisualGridHuntGame:
             'agent_pos': list(self.agent_pos),
             'opponent_positions': [list(op) for op in self.opponents],
             'smells_food': tuple(self.agent_pos) in self.food_positions,
+            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps, #Lab 1 - Step 2.2: Add smells_toxin
             'hit_wall': tuple(self.agent_pos) in self.walls,
             'collision': self.collision,
             'score': self.score,
@@ -73,6 +89,10 @@ class VisualGridHuntGame:
             self.food_positions.remove(tuple_pos)
             self.score += 20
 
+        # Lab 1 - Step 2.3:Toxic trap penalty
+        if tuple_pos in self.toxic_traps:
+            self.score -= 15
+            
         for op in self.opponents:
             move = random.choice(['Up', 'Down', 'Left', 'Right', 'Stay'])
             if move == 'Up' and op[1] < self.height - 1:
@@ -146,6 +166,21 @@ class GridGameGUI:
             self.canvas.create_oval(x1, y1, x1 + self.cell_size * 0.5, y1 + self.cell_size * 0.5, fill="#f59e0b",
                                     outline="#d97706")
 
+        # Lab 1 - Step 2.3: Draw toxic traps
+        for tx, ty in self.env.toxic_traps:
+            offset = self.cell_size * 0.25
+            x1 = tx * self.cell_size + offset
+            y1 = (self.env.height - 1 - ty) * self.cell_size + offset
+
+            self.canvas.create_rectangle(
+                x1,
+                y1,
+                x1 + self.cell_size * 0.5,
+                y1 + self.cell_size * 0.5,
+                fill="purple",
+                outline="black"
+            )
+            
         for ox, oy in self.env.opponents:
             offset = self.cell_size * 0.2
             x1 = ox * self.cell_size + offset
