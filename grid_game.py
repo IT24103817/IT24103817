@@ -1,18 +1,15 @@
 # grid_game.py
-import random
-
-
 class GridHuntGame:
     """A small Pacman-style grid environment (4x4) where an agent collects food."""
 
     def __init__(self, width=4, height=4):
         self.width = width
         self.height = height
-        self.agent_pos = [0, 0]  # Starting position (x, y)
+        self.agent_pos = [0, 0]
 
-        # Place a few random food pellets and obstacles (walls)
-        self.food_positions = {[1, 2], [2, 3], [3, 0], [2, 1]}
-        self.walls = {[1, 1], [2, 2]}
+        self.food_positions = {(1, 2), (2, 3), (3, 0), (2, 1)}
+        self.walls = {(1, 1), (2, 2)}
+        self.toxic_traps = {(0, 3), (3, 1)}
 
         self.score = 0
         self.steps = 0
@@ -21,7 +18,10 @@ class GridHuntGame:
         return {
             'agent_pos': list(self.agent_pos),
             'smells_food': tuple(self.agent_pos) in self.food_positions,
+            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps,
             'hit_wall': tuple(self.agent_pos) in self.walls,
+            'food_here': tuple(self.agent_pos) in self.food_positions,
+            'wall_ahead': tuple(self.agent_pos) in self.walls,
             'score': self.score,
             'remaining_food': len(self.food_positions)
         }
@@ -39,17 +39,18 @@ class GridHuntGame:
         elif action == 'Right':
             new_pos[0] = min(self.width - 1, new_pos[0] + 1)
 
-        # Check collision with walls
         if tuple(new_pos) in self.walls:
-            self.score -= 5  # Penalty for hitting a wall
+            self.score -= 5
         else:
             self.agent_pos = new_pos
 
-        # Check if eating food
         tuple_pos = tuple(self.agent_pos)
         if tuple_pos in self.food_positions:
             self.food_positions.remove(tuple_pos)
-            self.score += 20  # Reward for eating food pellet
+            self.score += 20
+
+        if tuple_pos in self.toxic_traps:
+            self.score -= 15
 
     def is_done(self) -> bool:
         return len(self.food_positions) == 0 or self.steps >= 20
