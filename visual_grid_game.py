@@ -50,11 +50,23 @@ class VisualGridHuntGame:
         self.collision = False
 
     def get_percept(self) -> dict:
+        # The lecture objective is to move from a fully observable world to a
+        # partially observable one. Instead of revealing exact coordinates, the
+        # environment returns only local booleans based on the current facing
+        # direction.
+        facing_dx, facing_dy = {
+            'Up': (0, 1),
+            'Down': (0, -1),
+            'Left': (-1, 0),
+            'Right': (1, 0),
+        }.get('Up', (0, 1))
+
+        ahead_x = self.agent_pos[0] + facing_dx
+        ahead_y = self.agent_pos[1] + facing_dy
+
         return {
-            'agent_pos': list(self.agent_pos),
-            'opponent_positions': [list(op) for op in self.opponents],
-            'smells_food': tuple(self.agent_pos) in self.food_positions,
-            'hit_wall': tuple(self.agent_pos) in self.walls,
+            'wall_ahead': (ahead_x, ahead_y) in self.walls,
+            'food_here': tuple(self.agent_pos) in self.food_positions,
             'smells_toxin': tuple(self.agent_pos) in self.toxic_traps,
             'collision': self.collision,
             'score': self.score,
