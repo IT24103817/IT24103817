@@ -15,10 +15,10 @@ DIRECTION_VECTORS = {
 class VisualGridHuntGame:
     """A flexible Pacman-style grid environment with support for configurable opponents and larger scales."""
 
-    def __init__(self, width=10, height=10, num_food=10, num_opponents=2, custom_walls=None, num_traps=5):
+    def __init__(self, width=10, height=10, num_food=10, num_opponents=2, custom_walls=None, num_traps=5, start_pos=(0, 0)):
         self.width = width
         self.height = height
-        self.agent_pos = [0, 0]  # Starting position (x, y)
+        self.agent_pos = list(start_pos)  # Starting position (x, y)
         self.facing = 'Up'       # Step 1.1: agent now has an orientation
 
         if custom_walls is not None:
@@ -33,7 +33,7 @@ class VisualGridHuntGame:
             fx = random.randint(0, self.width - 1)
             fy = random.randint(0, self.height - 1)
             pos_tuple = (fx, fy)
-            if pos_tuple != (0, 0) and pos_tuple not in self.walls:
+            if pos_tuple != tuple(self.agent_pos) and pos_tuple not in self.walls:
                 self.food_positions.add(pos_tuple)
 
         # Dynamically generate toxic traps avoiding start, walls, and food
@@ -42,7 +42,7 @@ class VisualGridHuntGame:
             tx = random.randint(0, self.width - 1)
             ty = random.randint(0, self.height - 1)
             pos_tuple = (tx, ty)
-            if (pos_tuple != (0, 0) and
+            if (pos_tuple != tuple(self.agent_pos) and
                     pos_tuple not in self.walls and
                     pos_tuple not in self.food_positions):
                 self.toxic_traps.add(pos_tuple)
@@ -53,7 +53,7 @@ class VisualGridHuntGame:
             ox = random.randint(0, self.width - 1)
             oy = random.randint(0, self.height - 1)
             op_pos = [ox, oy]
-            if (tuple(op_pos) != (0, 0) and
+            if (tuple(op_pos) != tuple(self.agent_pos) and
                     tuple(op_pos) not in self.walls and
                     tuple(op_pos) not in self.food_positions):
                 self.opponents.append(op_pos)
@@ -67,7 +67,7 @@ class VisualGridHuntGame:
         return DIRECTION_VECTORS[self.facing]
 
     def get_percept(self) -> dict:
-        
+
         dx, dy = self._direction_vector()
         ahead = (self.agent_pos[0] + dx, self.agent_pos[1] + dy)
         in_bounds = 0 <= ahead[0] < self.width and 0 <= ahead[1] < self.height
@@ -221,11 +221,11 @@ class ModelBasedAgent:
 
 class GridGameGUI:
 
-
-    def __init__(self, root, width=10, height=10, num_food=12, num_opponents=2, walls=None, agent_type='model'):
+    def __init__(self, root, width=10, height=10, num_food=12, num_opponents=2, walls=None, agent_type='model', start_pos=(0, 0)):
         self.root = root
         self.root.title("IT3012 - Scalable Multi-Agent Grid Hunt")
-        self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents, custom_walls=walls)
+        self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
+                                       custom_walls=walls, start_pos=start_pos)
 
         # Choose which kind of agent drives the simulation
         if agent_type == 'simple':
@@ -331,8 +331,10 @@ class GridGameGUI:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    # Try agent_type='simple' to watch the SimpleReflexAgent get stuck in a
-    # wall/corner loop, or agent_type='model' (default) to see it escape.
-    app = GridGameGUI(root, width=12, height=12, num_food=15, num_opponents=0, agent_type='simple')
-    
+    # Verified loop trap: SimpleReflexAgent cycles this 6-cell loop forever;
+    # ModelBasedAgent breaks out on its 3rd wall-hit via turn_right.
+    loop_walls = {(8, 8), (7, 4), (5, 4), (6, 8), (7, 5), (4, 7)}
+    app = GridGameGUI(root, width=12, height=12, num_food=15, num_opponents=0,
+                       walls=loop_walls, start_pos=(6, 6), agent_type='model')
+
     root.mainloop()
