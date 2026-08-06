@@ -6,7 +6,7 @@ import tkinter as tk
 class VisualGridHuntGame:
     """A flexible Pacman-style grid environment with support for configurable opponents and larger scales."""
 
-    def __init__(self, width=10, height=10, num_food=10, num_opponents=2, custom_walls=None):
+    def __init__(self, width=10, height=10, num_food=10, num_opponents=2, custom_walls=None, num_traps=2):
         self.width = width
         self.height = height
         self.agent_pos = [0, 0]  # Starting position (x, y)
@@ -25,6 +25,21 @@ class VisualGridHuntGame:
             pos_tuple = (fx, fy)
             if pos_tuple != (0, 0) and pos_tuple not in self.walls:
                 self.food_positions.add(pos_tuple)
+
+        # -- Lab 1 - 2.1
+        self.toxic_traps = set()
+        while len(self.toxic_traps) < num_traps:
+            tx = random.randint(0, self.width - 1)
+            ty = random.randint(0, self.height - 1)
+            trap_tuple = (tx, ty)
+
+            # Check safety: Avoid start (0,0), walls, and food
+            if (
+                trap_tuple != (0, 0)
+                and trap_tuple not in self.walls
+                and trap_tuple not in self.food_positions
+            ):
+                self.toxic_traps.add(trap_tuple)
 
         # Generate adversarial opponents
         self.opponents = []
@@ -45,6 +60,10 @@ class VisualGridHuntGame:
             'opponent_positions': [list(op) for op in self.opponents],
             'smells_food': tuple(self.agent_pos) in self.food_positions,
             'hit_wall': tuple(self.agent_pos) in self.walls,
+
+            # -- Lab 1 - 2.2
+            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps,
+        
             'collision': self.collision,
             'score': self.score,
             'remaining_food': len(self.food_positions)
@@ -72,6 +91,10 @@ class VisualGridHuntGame:
         if tuple_pos in self.food_positions:
             self.food_positions.remove(tuple_pos)
             self.score += 20
+
+        # -- Lab 1 - 2.3
+        if tuple_pos in self.toxic_traps:
+            self.score -= 15
 
         for op in self.opponents:
             move = random.choice(['Up', 'Down', 'Left', 'Right', 'Stay'])
@@ -145,6 +168,20 @@ class GridGameGUI:
             y1 = (self.env.height - 1 - fy) * self.cell_size + offset
             self.canvas.create_oval(x1, y1, x1 + self.cell_size * 0.5, y1 + self.cell_size * 0.5, fill="#f59e0b",
                                     outline="#d97706")
+        
+        # -- Lab 1 - 2.3
+        # Draw Toxic Traps as Purple Cells
+        for tx, ty in self.env.toxic_traps:
+            offset = self.cell_size * 0.2
+            x1 = tx * self.cell_size + offset
+            y1 = (self.env.height - 1 - ty) * self.cell_size + offset
+            self.canvas.create_oval(
+                x1, y1,
+                x1 + self.cell_size * 0.6,
+                y1 + self.cell_size * 0.6,
+                fill="#8b5cf6",  # Purple fill
+                outline="#6d28d9"  # Dark purple outline
+            )
 
         for ox, oy in self.env.opponents:
             offset = self.cell_size * 0.2
