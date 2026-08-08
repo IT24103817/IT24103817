@@ -47,7 +47,13 @@ class VisualGridHuntGame:
             ox = random.randint(0, self.width - 1)
             oy = random.randint(0, self.height - 1)
             op_pos = [ox, oy]
-            if tuple(op_pos) != (0, 0) and tuple(op_pos) not in self.walls and tuple(op_pos) not in self.food_positions:
+            if (
+                tuple(op_pos) != (0, 0) 
+                and tuple(op_pos) not in self.walls 
+                and tuple(op_pos) not in self.food_positions 
+                and tuple(op_pos) not in self.toxic_traps 
+                and tuple(op_pos) not in [tuple(op) for op in self.opponents]
+            ):
                 self.opponents.append(op_pos)
 
         self.score = 0
@@ -63,7 +69,8 @@ class VisualGridHuntGame:
             'hit_wall': tuple(self.agent_pos) in self.walls,
             'collision': self.collision,
             'score': self.score,
-            'remaining_food': len(self.food_positions)
+            'remaining_food': len(self.food_positions),
+            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps
         }
 
     def execute_action(self, action: str):
@@ -95,14 +102,22 @@ class VisualGridHuntGame:
             
         for op in self.opponents:
             move = random.choice(['Up', 'Down', 'Left', 'Right', 'Stay'])
+
+            new_op = list(op)
+
             if move == 'Up' and op[1] < self.height - 1:
-                op[1] += 1
+                new_op[1] += 1
             elif move == 'Down' and op[1] > 0:
-                op[1] -= 1
+                new_op[1] -= 1
             elif move == 'Left' and op[0] > 0:
-                op[0] -= 1
+                new_op[0] -= 1
             elif move == 'Right' and op[0] < self.width - 1:
-                op[0] += 1
+                new_op[0] += 1
+
+            # Move only if the new position is not a wall
+            if tuple(new_op) not in self.walls:
+                op[0] = new_op[0]
+                op[1] = new_op[1]
 
             if op == self.agent_pos:
                 self.score -= 50
@@ -217,5 +232,5 @@ class GridGameGUI:
 if __name__ == "__main__":
     root = tk.Tk()
     # Try a larger grid size like 12x12 with 15 food and 3 opponents!
-    app = GridGameGUI(root, width=12, height=12, num_food=15, num_opponents=0)
+    app = GridGameGUI(root, width=12, height=12, num_food=15, num_opponents=1)
     root.mainloop()
