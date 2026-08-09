@@ -27,35 +27,75 @@ class GreedyGridAgent:
 class SimpleReflexAgent:
     """A simple condition-action agent driven only by the current percept."""
 
-    def __init__(self):
-        self.actions_pool = ['Up', 'Down', 'Left', 'Right']
-
     def sense_and_act(self, percept: dict) -> str:
-        if percept.get('food_here'):
-            return 'Right'
+        facing = percept.get('facing_direction', 'Right')
         if percept.get('wall_ahead'):
-            return random.choice([a for a in self.actions_pool if a != 'Up'])
-        return random.choice(self.actions_pool)
+            turns = {'Up': 'Right', 'Right': 'Down', 'Down': 'Left', 'Left': 'Up'}
+            return turns[facing]
+        return facing
 
 
 class ModelBasedAgent:
     """A model-based agent that remembers its previous failures to avoid loops."""
 
     def __init__(self):
-        self.actions_pool = ['Up', 'Down', 'Left', 'Right']
+        self.visited_relative_cells = set()
+        self.current_relative_pos = [0, 0]
         self.last_action = None
-        self.last_percept = None
 
     def sense_and_act(self, percept: dict) -> str:
-        current_percept = tuple(sorted(percept.items()))
+        if self.last_action == 'Up':
+            self.current_relative_pos[1] += 1
+        elif self.last_action == 'Down':
+            self.current_relative_pos[1] -= 1
+        elif self.last_action == 'Left':
+            self.current_relative_pos[0] -= 1
+        elif self.last_action == 'Right':
+            self.current_relative_pos[0] += 1
 
-        if self.last_percept == current_percept and self.last_action is not None:
-            choices = [a for a in self.actions_pool if a != self.last_action]
-            action = choices[0] if choices else random.choice(self.actions_pool)
+        if percept.get('hit_wall') and self.last_action:
+            if self.last_action == 'Up':
+                self.current_relative_pos[1] -= 1
+            elif self.last_action == 'Down':
+                self.current_relative_pos[1] += 1
+            elif self.last_action == 'Left':
+                self.current_relative_pos[0] += 1
+            elif self.last_action == 'Right':
+                self.current_relative_pos[0] -= 1
+
+        current_pos_tuple = tuple(self.current_relative_pos)
+        self.visited_relative_cells.add(current_pos_tuple)
+        
+        facing = percept.get('facing_direction', 'Right')
+        
+        ahead_pos = list(self.current_relative_pos)
+        if facing == 'Up':
+            ahead_pos[1] += 1
+        elif facing == 'Down':
+            ahead_pos[1] -= 1
+        elif facing == 'Left':
+            ahead_pos[0] -= 1
+        elif facing == 'Right':
+            ahead_pos[0] += 1
+            
+        ahead_visited = tuple(ahead_pos) in self.visited_relative_cells
+        
+        if percept.get('wall_ahead') or ahead_visited:
+            turns = {'Up': 'Right', 'Right': 'Down', 'Down': 'Left', 'Left': 'Up'}
+            action = turns[facing]
+            for _ in range(3):
+                test_pos = list(self.current_relative_pos)
+                if action == 'Up': test_pos[1] += 1
+                elif action == 'Down': test_pos[1] -= 1
+                elif action == 'Left': test_pos[0] -= 1
+                elif action == 'Right': test_pos[0] += 1
+                
+                if tuple(test_pos) not in self.visited_relative_cells:
+                    break
+                action = turns[action]
         else:
-            action = 'Left' if percept.get('wall_ahead') else random.choice(self.actions_pool)
-
-        self.last_percept = current_percept
+            action = facing
+            
         self.last_action = action
         return action
 

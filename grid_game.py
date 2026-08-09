@@ -6,6 +6,7 @@ class GridHuntGame:
         self.width = width
         self.height = height
         self.agent_pos = [0, 0]
+        self.facing_direction = 'Right'
 
         self.food_positions = {(1, 2), (2, 3), (3, 0), (2, 1)}
         self.walls = {(1, 1), (2, 2)}
@@ -15,13 +16,27 @@ class GridHuntGame:
         self.steps = 0
 
     def get_percept(self, agent) -> dict:
+        ahead_pos = list(self.agent_pos)
+        if self.facing_direction == 'Up':
+            ahead_pos[1] += 1
+        elif self.facing_direction == 'Down':
+            ahead_pos[1] -= 1
+        elif self.facing_direction == 'Left':
+            ahead_pos[0] -= 1
+        elif self.facing_direction == 'Right':
+            ahead_pos[0] += 1
+            
+        is_wall_ahead = tuple(ahead_pos) in self.walls or \
+                        ahead_pos[0] < 0 or ahead_pos[0] >= self.width or \
+                        ahead_pos[1] < 0 or ahead_pos[1] >= self.height
+
         return {
-            'agent_pos': list(self.agent_pos),
+            'facing_direction': self.facing_direction,
             'smells_food': tuple(self.agent_pos) in self.food_positions,
             'smells_toxin': tuple(self.agent_pos) in self.toxic_traps,
             'hit_wall': tuple(self.agent_pos) in self.walls,
             'food_here': tuple(self.agent_pos) in self.food_positions,
-            'wall_ahead': tuple(self.agent_pos) in self.walls,
+            'wall_ahead': is_wall_ahead,
             'score': self.score,
             'remaining_food': len(self.food_positions)
         }
@@ -29,6 +44,9 @@ class GridHuntGame:
     def execute_action(self, agent, action: str):
         self.steps += 1
         new_pos = list(self.agent_pos)
+
+        if action in ['Up', 'Down', 'Left', 'Right']:
+            self.facing_direction = action
 
         if action == 'Up':
             new_pos[1] = min(self.height - 1, new_pos[1] + 1)
