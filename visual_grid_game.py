@@ -6,7 +6,7 @@ import tkinter as tk
 class VisualGridHuntGame:
     """A flexible Pacman-style grid environment with support for configurable opponents and larger scales."""
 
-    def __init__(self, width=10, height=10, num_food=10, num_opponents=2, custom_walls=None, num_traps=2):
+    def __init__(self, width=10, height=10, num_food=10, num_opponents=2, custom_walls=None):
         self.width = width
         self.height = height
         self.agent_pos = [0, 0]  # Starting position (x, y)
@@ -26,21 +26,6 @@ class VisualGridHuntGame:
             if pos_tuple != (0, 0) and pos_tuple not in self.walls:
                 self.food_positions.add(pos_tuple)
 
-        # -- Lab 1 - 2.1
-        self.toxic_traps = set()
-        while len(self.toxic_traps) < num_traps:
-            tx = random.randint(0, self.width - 1)
-            ty = random.randint(0, self.height - 1)
-            trap_tuple = (tx, ty)
-
-            # Check safety: Avoid start (0,0), walls, and food
-            if (
-                trap_tuple != (0, 0)
-                and trap_tuple not in self.walls
-                and trap_tuple not in self.food_positions
-            ):
-                self.toxic_traps.add(trap_tuple)
-
         # Generate adversarial opponents
         self.opponents = []
         while len(self.opponents) < num_opponents:
@@ -50,20 +35,46 @@ class VisualGridHuntGame:
             if tuple(op_pos) != (0, 0) and tuple(op_pos) not in self.walls and tuple(op_pos) not in self.food_positions:
                 self.opponents.append(op_pos)
 
+        self.toxic_traps = set()
+        num_traps = 2
+        while len(self.toxic_traps) < num_traps:
+            tx = random.randint(0, self.width - 1)
+            ty = random.randint(0, self.height - 1)
+            pos_tuple = (tx, ty)
+            if (pos_tuple != (0, 0) and 
+                pos_tuple not in self.walls and 
+                pos_tuple not in self.food_positions and 
+                pos_tuple not in [tuple(op) for op in self.opponents]):
+                self.toxic_traps.add(pos_tuple)
+
         self.score = 0
         self.steps = 0
         self.collision = False
+        self.facing = 'Up'
 
     def get_percept(self) -> dict:
-        return {
-            'agent_pos': list(self.agent_pos),
-            'opponent_positions': [list(op) for op in self.opponents],
-            'smells_food': tuple(self.agent_pos) in self.food_positions,
-            'hit_wall': tuple(self.agent_pos) in self.walls,
+        dx, dy = 0, 0
+        if self.facing == 'Up':
+            dy = 1
+        elif self.facing == 'Down':
+            dy = -1
+        elif self.facing == 'Left':
+            dx = -1
+        elif self.facing == 'Right':
+            dx = 1
 
-            # -- Lab 1 - 2.2
-            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps,
-        
+        front_x = self.agent_pos[0] + dx
+        front_y = self.agent_pos[1] + dy
+
+        wall_ahead = (
+            front_x < 0 or front_x >= self.width or
+            front_y < 0 or front_y >= self.height or
+            (front_x, front_y) in self.walls
+        )
+
+        return {
+            'wall_ahead': wall_ahead,
+            'food_here': tuple(self.agent_pos) in self.food_positions,
             'collision': self.collision,
             'score': self.score,
             'remaining_food': len(self.food_positions)
@@ -71,30 +82,44 @@ class VisualGridHuntGame:
 
     def execute_action(self, action: str):
         self.steps += 1
-        new_pos = list(self.agent_pos)
+        dirs = ['Up', 'Right', 'Down', 'Left']
 
-        if action == 'Up':
-            new_pos[1] = min(self.height - 1, new_pos[1] + 1)
-        elif action == 'Down':
-            new_pos[1] = max(0, new_pos[1] - 1)
-        elif action == 'Left':
-            new_pos[0] = max(0, new_pos[0] - 1)
-        elif action == 'Right':
-            new_pos[0] = min(self.width - 1, new_pos[0] + 1)
+        if action == 'turn_left':
+            idx = dirs.index(self.facing)
+            self.facing = dirs[(idx - 1) % 4]
+        elif action == 'turn_right':
+            idx = dirs.index(self.facing)
+            self.facing = dirs[(idx + 1) % 4]
+        elif action == 'suck':
+            tuple_pos = tuple(self.agent_pos)
+            if tuple_pos in self.food_positions:
+                self.food_positions.remove(tuple_pos)
+                self.score += 20
+        elif action == 'move_forward' or action in ['Up', 'Down', 'Left', 'Right']:
+            new_pos = list(self.agent_pos)
+            move_dir = self.facing if action == 'move_forward' else action
+            if move_dir == 'Up':
+                new_pos[1] = min(self.height - 1, new_pos[1] + 1)
+            elif move_dir == 'Down':
+                new_pos[1] = max(0, new_pos[1] - 1)
+            elif move_dir == 'Left':
+                new_pos[0] = max(0, new_pos[0] - 1)
+            elif move_dir == 'Right':
+                new_pos[0] = min(self.width - 1, new_pos[0] + 1)
 
-        if tuple(new_pos) in self.walls:
-            self.score -= 5
-        else:
-            self.agent_pos = new_pos
+            if tuple(new_pos) in self.walls:
+                self.score -= 5
+            else:
+                self.agent_pos = new_pos
 
         tuple_pos = tuple(self.agent_pos)
         if tuple_pos in self.food_positions:
             self.food_positions.remove(tuple_pos)
             self.score += 20
 
-        # -- Lab 1 - 2.3
         if tuple_pos in self.toxic_traps:
-            self.score -= 15
+            self.score -= 15 
+            self.toxic_traps.remove(tuple_pos)  
 
         for op in self.opponents:
             move = random.choice(['Up', 'Down', 'Left', 'Right', 'Stay'])
@@ -112,7 +137,7 @@ class VisualGridHuntGame:
                 self.collision = True
 
     def is_done(self) -> bool:
-        return len(self.food_positions) == 0 or self.steps >= 60 or self.collision
+        return len(self.food_positions) == 0 or self.steps >= 1000 or self.collision
 
 
 class GridGameGUI:
@@ -120,7 +145,7 @@ class GridGameGUI:
 
     def __init__(self, root, width=10, height=10, num_food=12, num_opponents=2, walls=None):
         self.root = root
-        self.root.title("IT3012 - Scalable Multi-Agent Grid Hunt")
+        self.root.title("IT3012 - Scalable Multi-Agent Grid Hunt with Toxic Traps")
 
         self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
                                       custom_walls=walls)
@@ -168,19 +193,18 @@ class GridGameGUI:
             y1 = (self.env.height - 1 - fy) * self.cell_size + offset
             self.canvas.create_oval(x1, y1, x1 + self.cell_size * 0.5, y1 + self.cell_size * 0.5, fill="#f59e0b",
                                     outline="#d97706")
-        
-        # -- Lab 1 - 2.3
-        # Draw Toxic Traps as Purple Cells
+
         for tx, ty in self.env.toxic_traps:
             offset = self.cell_size * 0.2
             x1 = tx * self.cell_size + offset
             y1 = (self.env.height - 1 - ty) * self.cell_size + offset
-            self.canvas.create_oval(
-                x1, y1,
-                x1 + self.cell_size * 0.6,
-                y1 + self.cell_size * 0.6,
-                fill="#8b5cf6",  # Purple fill
-                outline="#6d28d9"  # Dark purple outline
+            self.canvas.create_polygon(
+                x1 + self.cell_size * 0.3, y1, 
+                x1 + self.cell_size * 0.6, y1 + self.cell_size * 0.3,  
+                x1 + self.cell_size * 0.3, y1 + self.cell_size * 0.6, 
+                x1, y1 + self.cell_size * 0.3, 
+                fill="#a855f7", 
+                outline="#7c3aed"  
             )
 
         for ox, oy in self.env.opponents:
@@ -199,10 +223,13 @@ class GridGameGUI:
 
     def run_loop(self):
         self.btn.config(state="disabled")
+        from agent import ModelBasedAgent
+        agent = ModelBasedAgent()
 
         def step():
             if not self.env.is_done():
-                action = random.choice(['Up', 'Down', 'Left', 'Right'])
+                percept = self.env.get_percept()
+                action = agent.sense_and_act(percept)
                 self.env.execute_action(action)
 
                 self.draw_grid()
@@ -219,5 +246,5 @@ class GridGameGUI:
 if __name__ == "__main__":
     root = tk.Tk()
     # Try a larger grid size like 12x12 with 15 food and 3 opponents!
-    app = GridGameGUI(root, width=12, height=12, num_food=15, num_opponents=0)
-    root.mainloop()
+    app = GridGameGUI(root, width=12, height=12, num_food=15, num_opponents=3)
+    root.mainloop() 
