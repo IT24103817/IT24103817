@@ -1,57 +1,7 @@
-# visual_grid_game.py
 import random
 import tkinter as tk
 
-class SimpleReflexAgent:
-    def sense_and_act(self, percept):
-        if percept.get('food_here'):
-            return 'suck'
-        if percept.get('wall_ahead'):
-            return 'turn_left'
-        return 'move_forward'
-
-class ModelBasedAgent:
-    def __init__(self):
-        self.visited_cells = set()
-        self.pos = (0, 0)
-        self.facing = 'Up'
-        self.last_action = None
-
-    def sense_and_act(self, percept):
-        if self.last_action == 'turn_left':
-            dirs = ['Up', 'Left', 'Down', 'Right']
-            self.facing = dirs[(dirs.index(self.facing) + 1) % 4]
-        elif self.last_action == 'turn_right':
-            dirs = ['Up', 'Right', 'Down', 'Left']
-            self.facing = dirs[(dirs.index(self.facing) + 1) % 4]
-        elif self.last_action == 'move_forward':
-            if self.facing == 'Up': self.pos = (self.pos[0], self.pos[1] + 1)
-            elif self.facing == 'Down': self.pos = (self.pos[0], self.pos[1] - 1)
-            elif self.facing == 'Left': self.pos = (self.pos[0] - 1, self.pos[1])
-            elif self.facing == 'Right': self.pos = (self.pos[0] + 1, self.pos[1])
-
-        self.visited_cells.add(self.pos)
-
-        left_pos = self.pos
-        if self.facing == 'Up': left_pos = (self.pos[0] - 1, self.pos[1])
-        elif self.facing == 'Down': left_pos = (self.pos[0] + 1, self.pos[1])
-        elif self.facing == 'Left': left_pos = (self.pos[0], self.pos[1] - 1)
-        elif self.facing == 'Right': left_pos = (self.pos[0], self.pos[1] + 1)
-
-        left_is_visited = left_pos in self.visited_cells
-
-        if percept.get('food_here'):
-            action = 'suck'
-        elif percept.get('wall_ahead'):
-            if left_is_visited:
-                action = 'turn_right'
-            else:
-                action = 'turn_left'
-        else:
-            action = 'move_forward'
-
-        self.last_action = action
-        return action
+from agent import ModelBasedAgent, SimpleReflexAgent
 
 
 class VisualGridHuntGame:
@@ -78,15 +28,15 @@ class VisualGridHuntGame:
             if pos_tuple != (0, 0) and pos_tuple not in self.walls:
                 self.food_positions.add(pos_tuple)
 
-        # Generate toxic traps avoiding walls, agent start, and food
+        # Toxic traps: positions that penalize the agent if entered.
         self.toxic_traps = set()
-        num_traps = 3
+        num_traps = max(1, num_food // 3)
         while len(self.toxic_traps) < num_traps:
             tx = random.randint(0, self.width - 1)
             ty = random.randint(0, self.height - 1)
-            pos_tuple = (tx, ty)
-            if pos_tuple != (0, 0) and pos_tuple not in self.walls and pos_tuple not in self.food_positions:
-                self.toxic_traps.add(pos_tuple)
+            tpos = (tx, ty)
+            if tpos != (0, 0) and tpos not in self.walls and tpos not in self.food_positions:
+                self.toxic_traps.add(tpos)
 
         # Generate adversarial opponents
         self.opponents = []
@@ -112,14 +62,16 @@ class VisualGridHuntGame:
             ahead_pos[0] -= 1
         elif self.agent_facing == 'Right':
             ahead_pos[0] += 1
-            
-        wall_ahead = tuple(ahead_pos) in self.walls or \
-                     ahead_pos[0] < 0 or ahead_pos[0] >= self.width or \
-                     ahead_pos[1] < 0 or ahead_pos[1] >= self.height
-        
+
+        wall_ahead = (
+            tuple(ahead_pos) in self.walls
+            or ahead_pos[0] < 0 or ahead_pos[0] >= self.width
+            or ahead_pos[1] < 0 or ahead_pos[1] >= self.height
+        )
+
         return {
             'wall_ahead': wall_ahead,
-            'food_here': tuple(self.agent_pos) in self.food_positions
+            'food_here': tuple(self.agent_pos) in self.food_positions,
         }
 
     def execute_action(self, action: str):
@@ -141,6 +93,17 @@ class VisualGridHuntGame:
                 new_pos[0] = max(0, new_pos[0] - 1)
             elif self.agent_facing == 'Right':
                 new_pos[0] = min(self.width - 1, new_pos[0] + 1)
+        elif action in ('Up', 'Down', 'Left', 'Right'):
+            # Cardinal movement aliases used by the agent module and tests.
+            if action == 'Up':
+                new_pos[1] = min(self.height - 1, new_pos[1] + 1)
+            elif action == 'Down':
+                new_pos[1] = max(0, new_pos[1] - 1)
+            elif action == 'Left':
+                new_pos[0] = max(0, new_pos[0] - 1)
+            elif action == 'Right':
+                new_pos[0] = min(self.width - 1, new_pos[0] + 1)
+            self.agent_facing = action
 
         if tuple(new_pos) in self.walls:
             self.score -= 5
@@ -181,11 +144,19 @@ class GridGameGUI:
         self.root = root
         self.root.title("IT3012 - Scalable Multi-Agent Grid Hunt")
 
-        self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
-                                      custom_walls=walls)
-                                      
-        # Initialize the agent (Change this to ModelBasedAgent() to see Step 1.3)
-        self.agent = SimpleReflexAgent()
+        self.width = width
+        self.height = height
+        self.num_food = num_food
+        self.num_opponents = num_opponents
+        self.walls = walls
+
+        self.env = VisualGridHuntGame(
+            width=width,
+            height=height,
+            num_food=num_food,
+            num_opponents=num_opponents,
+            custom_walls=walls,
+        )
 
         # Dynamically calculate cell size so the total canvas fits nicely within a 600x600 window ceiling
         max_canvas_dim = 600
@@ -200,10 +171,37 @@ class GridGameGUI:
         self.label = tk.Label(root, text="Score: 0 | Steps: 0", font=("Arial", 14))
         self.label.pack(pady=10)
 
-        self.btn = tk.Button(root, text="Start Simulation", command=self.run_loop, font=("Arial", 12), bg="#000066",
-                             fg="white")
-        self.btn.pack(pady=5)
+        self.btn_simple = tk.Button(
+            root,
+            text="Run Simple Reflex Agent",
+            command=lambda: self.run_loop(SimpleReflexAgent()),
+            font=("Arial", 12),
+            bg="#0b6623",
+            fg="white",
+        )
+        self.btn_simple.pack(pady=4)
 
+        self.btn_model = tk.Button(
+            root,
+            text="Run Model-Based Agent",
+            command=lambda: self.run_loop(ModelBasedAgent()),
+            font=("Arial", 12),
+            bg="#1f4e79",
+            fg="white",
+        )
+        self.btn_model.pack(pady=4)
+
+        self.draw_grid()
+
+    def reset_environment(self):
+        self.env = VisualGridHuntGame(
+            width=self.width,
+            height=self.height,
+            num_food=self.num_food,
+            num_opponents=self.num_opponents,
+            custom_walls=self.walls,
+        )
+        self.label.config(text="Score: 0 | Steps: 0")
         self.draw_grid()
 
     def draw_grid(self):
@@ -219,17 +217,27 @@ class GridGameGUI:
                 color = "#f1f5f9" if (x, y) not in self.env.walls else "#64748b"
                 self.canvas.create_rectangle(x1, y1, x2, y2, fill=color, outline="#cbd5e1")
 
-                # Only draw text if cell is large enough
                 if self.cell_size >= 40 and (x, y) in self.env.walls:
-                    self.canvas.create_text(x1 + self.cell_size / 2, y1 + self.cell_size / 2, text="W", fill="white",
-                                            font=("Arial", 8, "bold"))
+                    self.canvas.create_text(
+                        x1 + self.cell_size / 2,
+                        y1 + self.cell_size / 2,
+                        text="W",
+                        fill="white",
+                        font=("Arial", 8, "bold"),
+                    )
 
         for fx, fy in self.env.food_positions:
             offset = self.cell_size * 0.25
             x1 = fx * self.cell_size + offset
             y1 = (self.env.height - 1 - fy) * self.cell_size + offset
-            self.canvas.create_oval(x1, y1, x1 + self.cell_size * 0.5, y1 + self.cell_size * 0.5, fill="#f59e0b",
-                                    outline="#d97706")
+            self.canvas.create_oval(
+                x1,
+                y1,
+                x1 + self.cell_size * 0.5,
+                y1 + self.cell_size * 0.5,
+                fill="#f59e0b",
+                outline="#d97706",
+            )
 
         for tx, ty in self.env.toxic_traps:
             offset = self.cell_size * 0.25
@@ -237,48 +245,81 @@ class GridGameGUI:
             y1 = (self.env.height - 1 - ty) * self.cell_size + offset
             cx = x1 + self.cell_size * 0.25
             cy = y1 + self.cell_size * 0.25
-            self.canvas.create_polygon(cx, y1, x1 + self.cell_size * 0.5, cy, cx, y1 + self.cell_size * 0.5, x1, cy, fill="#9c27b0", outline="#7b1fa2")
+            self.canvas.create_polygon(
+                cx,
+                y1,
+                x1 + self.cell_size * 0.5,
+                cy,
+                cx,
+                y1 + self.cell_size * 0.5,
+                x1,
+                cy,
+                fill="#9c27b0",
+                outline="#7b1fa2",
+            )
 
         for ox, oy in self.env.opponents:
             offset = self.cell_size * 0.2
             x1 = ox * self.cell_size + offset
             y1 = (self.env.height - 1 - oy) * self.cell_size + offset
-            self.canvas.create_rectangle(x1, y1, x1 + self.cell_size * 0.6, y1 + self.cell_size * 0.6, fill="#990000",
-                                         outline="#7a0000")
+            self.canvas.create_rectangle(
+                x1,
+                y1,
+                x1 + self.cell_size * 0.6,
+                y1 + self.cell_size * 0.6,
+                fill="#990000",
+                outline="#7a0000",
+            )
 
         ax, ay = self.env.agent_pos
         offset = self.cell_size * 0.15
         x1 = ax * self.cell_size + offset
         y1 = (self.env.height - 1 - ay) * self.cell_size + offset
-        self.canvas.create_oval(x1, y1, x1 + self.cell_size * 0.7, y1 + self.cell_size * 0.7, fill="#000066",
-                                outline="#1e3a8a")
-                                
-        # Draw facing direction indicator
+        self.canvas.create_oval(
+            x1,
+            y1,
+            x1 + self.cell_size * 0.7,
+            y1 + self.cell_size * 0.7,
+            fill="#000066",
+            outline="#1e3a8a",
+        )
+
         cx = x1 + self.cell_size * 0.35
         cy = y1 + self.cell_size * 0.35
         dx, dy = 0, 0
-        if self.env.agent_facing == 'Up': dy = -self.cell_size * 0.35
-        elif self.env.agent_facing == 'Down': dy = self.cell_size * 0.35
-        elif self.env.agent_facing == 'Left': dx = -self.cell_size * 0.35
-        elif self.env.agent_facing == 'Right': dx = self.cell_size * 0.35
+        if self.env.agent_facing == 'Up':
+            dy = -self.cell_size * 0.35
+        elif self.env.agent_facing == 'Down':
+            dy = self.cell_size * 0.35
+        elif self.env.agent_facing == 'Left':
+            dx = -self.cell_size * 0.35
+        elif self.env.agent_facing == 'Right':
+            dx = self.cell_size * 0.35
         self.canvas.create_line(cx, cy, cx + dx, cy + dy, fill="white", width=2)
 
-    def run_loop(self):
-        self.btn.config(state="disabled")
+    def run_loop(self, agent):
+        self.reset_environment()
+        self.btn_simple.config(state="disabled")
+        self.btn_model.config(state="disabled")
 
         def step():
             if not self.env.is_done():
                 percept = self.env.get_percept()
-                action = self.agent.sense_and_act(percept)
+                action = agent.sense_and_act(percept)
                 self.env.execute_action(action)
 
                 self.draw_grid()
                 self.label.config(text=f"Score: {self.env.score} | Steps: {self.env.steps} | Action: {action}")
                 self.root.after(250, step)
             else:
-                end_text = f"Collision! Game Over! Final Score: {self.env.score}" if self.env.collision else f"Finished! Final Score: {self.env.score}"
+                end_text = (
+                    f"Collision! Game Over! Final Score: {self.env.score}"
+                    if self.env.collision
+                    else f"Finished! Final Score: {self.env.score}"
+                )
                 self.label.config(text=end_text)
-                self.btn.config(state="normal")
+                self.btn_simple.config(state="normal")
+                self.btn_model.config(state="normal")
 
         step()
 
