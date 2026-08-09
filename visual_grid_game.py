@@ -10,6 +10,7 @@ class VisualGridHuntGame:
         self.width = width
         self.height = height
         self.agent_pos = [0, 0]  # Starting position (x, y)
+        self.agent_dir = 'Right'  # Facing direction: 'Up','Down','Left','Right'
 
         if custom_walls is not None:
             self.walls = set(custom_walls)
@@ -51,12 +52,22 @@ class VisualGridHuntGame:
         self.collision = False
 
     def get_percept(self) -> dict:
+        # Partial observability: only local booleans about the cell ahead and current cell
+        # Compute cell ahead based on current facing direction
+        ax, ay = self.agent_pos
+        if self.agent_dir == 'Up':
+            ahead = (ax, min(self.height - 1, ay + 1))
+        elif self.agent_dir == 'Down':
+            ahead = (ax, max(0, ay - 1))
+        elif self.agent_dir == 'Left':
+            ahead = (max(0, ax - 1), ay)
+        else:  # Right
+            ahead = (min(self.width - 1, ax + 1), ay)
+
         return {
-            'agent_pos': list(self.agent_pos),
-            'opponent_positions': [list(op) for op in self.opponents],
-            'smells_food': tuple(self.agent_pos) in self.food_positions,
-            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps,
-            'hit_wall': tuple(self.agent_pos) in self.walls,
+            'wall_ahead': ahead in self.walls,
+            'food_here': tuple(self.agent_pos) in self.food_positions,
+            'facing': self.agent_dir,
             'collision': self.collision,
             'score': self.score,
             'remaining_food': len(self.food_positions)
@@ -64,17 +75,45 @@ class VisualGridHuntGame:
 
     def execute_action(self, action: str):
         self.steps += 1
+        # Support high-level actions: 'Forward', 'TurnLeft', 'TurnRight', 'Stay'
+        # Also accept legacy cardinal moves for convenience
         new_pos = list(self.agent_pos)
 
-        if action == 'Up':
-            new_pos[1] = min(self.height - 1, new_pos[1] + 1)
-        elif action == 'Down':
-            new_pos[1] = max(0, new_pos[1] - 1)
-        elif action == 'Left':
-            new_pos[0] = max(0, new_pos[0] - 1)
-        elif action == 'Right':
-            new_pos[0] = min(self.width - 1, new_pos[0] + 1)
+        if action == 'Forward':
+            if self.agent_dir == 'Up':
+                new_pos[1] = min(self.height - 1, new_pos[1] + 1)
+            elif self.agent_dir == 'Down':
+                new_pos[1] = max(0, new_pos[1] - 1)
+            elif self.agent_dir == 'Left':
+                new_pos[0] = max(0, new_pos[0] - 1)
+            else:  # Right
+                new_pos[0] = min(self.width - 1, new_pos[0] + 1)
+        elif action == 'TurnLeft':
+            order = ['Up', 'Left', 'Down', 'Right']
+            idx = order.index(self.agent_dir)
+            self.agent_dir = order[(idx + 1) % 4]
+        elif action == 'TurnRight':
+            order = ['Up', 'Right', 'Down', 'Left']
+            idx = order.index(self.agent_dir)
+            self.agent_dir = order[(idx + 1) % 4]
+        elif action == 'Stay':
+            pass
+        elif action in ('Up', 'Down', 'Left', 'Right'):
+            # Immediate cardinal move (legacy)
+            if action == 'Up':
+                new_pos[1] = min(self.height - 1, new_pos[1] + 1)
+                self.agent_dir = 'Up'
+            elif action == 'Down':
+                new_pos[1] = max(0, new_pos[1] - 1)
+                self.agent_dir = 'Down'
+            elif action == 'Left':
+                new_pos[0] = max(0, new_pos[0] - 1)
+                self.agent_dir = 'Left'
+            elif action == 'Right':
+                new_pos[0] = min(self.width - 1, new_pos[0] + 1)
+                self.agent_dir = 'Right'
 
+        # If the target cell is a wall, penalise and do not move
         if tuple(new_pos) in self.walls:
             self.score -= 5
         else:
@@ -108,6 +147,72 @@ class VisualGridHuntGame:
         return len(self.food_positions) == 0 or self.steps >= 60 or self.collision
 
 
+class SimpleReflexAgent:
+    """Simple reflex agent: no memory, condition-action rules only."""
+    def sense_and_act(self, percept: dict) -> str:
+        if percept.get('food_here'):
+            return 'Stay'
+        if percept.get('wall_ahead'):
+            return 'TurnLeft'
+        return 'Forward'
+
+
+class ModelBasedAgent:
+    """Model-based agent: keeps an internal visited map and last action to avoid loops."""
+    def __init__(self):
+        self.visited = set()
+        self.pos = (0, 0)  # internal estimate of position (assume start at origin)
+        self.facing = 'Right'
+        self.last_action = None
+
+    def _forward_pos(self, pos, facing):
+        x, y = pos
+        if facing == 'Up':
+            return (x, y + 1)
+        if facing == 'Down':
+            return (x, y - 1)
+        if facing == 'Left':
+            return (x - 1, y)
+        return (x + 1, y)
+
+    def _left_of(self, facing):
+        return {'Up': 'Left', 'Left': 'Down', 'Down': 'Right', 'Right': 'Up'}[facing]
+
+    def _right_of(self, facing):
+        return {'Up': 'Right', 'Right': 'Down', 'Down': 'Left', 'Left': 'Up'}[facing]
+
+    def _left_pos(self, pos, facing):
+        left = self._left_of(facing)
+        return self._forward_pos(pos, left)
+
+    def sense_and_act(self, percept: dict) -> str:
+        # Update internal model from the last action
+        if self.last_action == 'Forward':
+            self.pos = self._forward_pos(self.pos, self.facing)
+        elif self.last_action == 'TurnLeft':
+            self.facing = self._left_of(self.facing)
+        elif self.last_action == 'TurnRight':
+            self.facing = self._right_of(self.facing)
+
+        # Record visited cell
+        self.visited.add(self.pos)
+
+        # Decision logic using memory
+        if percept.get('food_here'):
+            action = 'Stay'
+        elif percept.get('wall_ahead'):
+            left_cell = self._left_pos(self.pos, self.facing)
+            if left_cell in self.visited:
+                action = 'TurnRight'
+            else:
+                action = 'TurnLeft'
+        else:
+            action = 'Forward'
+
+        self.last_action = action
+        return action
+
+
 class GridGameGUI:
     """Tkinter wrapper that dynamically scales cell sizes to keep larger grids on screen."""
 
@@ -131,9 +236,16 @@ class GridGameGUI:
         self.label = tk.Label(root, text="Score: 0 | Steps: 0", font=("Arial", 14))
         self.label.pack(pady=10)
 
-        self.btn = tk.Button(root, text="Start Simulation", command=self.run_loop, font=("Arial", 12), bg="#000066",
-                             fg="white")
-        self.btn.pack(pady=5)
+        # Buttons to start with different agent architectures
+        self.btn_simple = tk.Button(root, text="Run Simple Reflex Agent",
+                        command=lambda: self.run_loop(SimpleReflexAgent()), font=("Arial", 12), bg="#0b6623",
+                        fg="white")
+        self.btn_simple.pack(pady=4)
+
+        self.btn_model = tk.Button(root, text="Run Model-Based Agent",
+                       command=lambda: self.run_loop(ModelBasedAgent()), font=("Arial", 12), bg="#1f4e79",
+                       fg="white")
+        self.btn_model.pack(pady=4)
 
         self.draw_grid()
 
@@ -189,21 +301,32 @@ class GridGameGUI:
         self.canvas.create_oval(x1, y1, x1 + self.cell_size * 0.7, y1 + self.cell_size * 0.7, fill="#000066",
                                 outline="#1e3a8a")
 
-    def run_loop(self):
-        self.btn.config(state="disabled")
+    def run_loop(self, agent):
+        # disable both control buttons while running
+        try:
+            self.btn_simple.config(state="disabled")
+            self.btn_model.config(state="disabled")
+        except Exception:
+            pass
 
         def step():
             if not self.env.is_done():
-                action = random.choice(['Up', 'Down', 'Left', 'Right'])
+                percept = self.env.get_percept()
+                action = agent.sense_and_act(percept)
                 self.env.execute_action(action)
 
                 self.draw_grid()
                 self.label.config(text=f"Score: {self.env.score} | Steps: {self.env.steps} | Action: {action}")
-                self.root.after(250, step)
+                self.root.after(200, step)
             else:
                 end_text = f"Collision! Game Over! Final Score: {self.env.score}" if self.env.collision else f"Finished! Final Score: {self.env.score}"
                 self.label.config(text=end_text)
-                self.btn.config(state="normal")
+                # re-enable buttons
+                try:
+                    self.btn_simple.config(state="normal")
+                    self.btn_model.config(state="normal")
+                except Exception:
+                    pass
 
         step()
 
