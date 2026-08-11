@@ -65,6 +65,7 @@ class VisualGridHuntGame:
             'agent_pos': list(self.agent_pos),
             'opponent_positions': [list(op) for op in self.opponents],
             'smells_food': tuple(self.agent_pos) in self.food_positions,
+            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps,
             'hit_wall': tuple(self.agent_pos) in self.walls,
             'collision': self.collision,
             'score': self.score,
@@ -90,6 +91,10 @@ class VisualGridHuntGame:
             self.agent_pos = new_pos
 
         tuple_pos = tuple(self.agent_pos)
+
+        if tuple_pos in self.toxic_traps:
+            self.score -= 15
+
         if tuple_pos in self.food_positions:
             self.food_positions.remove(tuple_pos)
             self.score += 20
