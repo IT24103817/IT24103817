@@ -1,4 +1,3 @@
-# visual_grid_game.py
 import random
 import tkinter as tk
 
@@ -19,15 +18,13 @@ class VisualGridHuntGame:
         self.width = width
         self.height = height
         self.agent_pos = list(start_pos)  # Starting position (x, y)
-        self.facing = 'Up'       # Step 1.1: agent now has an orientation
+        self.facing = 'Up'  # agent orientation
 
         if custom_walls is not None:
             self.walls = set(custom_walls)
         else:
-            # Generate some default scattered walls for a larger grid
             self.walls = {(2, 2), (2, 3), (5, 5), (6, 5), (3, 7)}
 
-        # Dynamically generate random food positions avoiding walls and agent start
         self.food_positions = set()
         while len(self.food_positions) < num_food:
             fx = random.randint(0, self.width - 1)
@@ -36,7 +33,6 @@ class VisualGridHuntGame:
             if pos_tuple != tuple(self.agent_pos) and pos_tuple not in self.walls:
                 self.food_positions.add(pos_tuple)
 
-        # Dynamically generate toxic traps avoiding start, walls, and food
         self.toxic_traps = set()
         while len(self.toxic_traps) < num_traps:
             tx = random.randint(0, self.width - 1)
@@ -47,7 +43,6 @@ class VisualGridHuntGame:
                     pos_tuple not in self.food_positions):
                 self.toxic_traps.add(pos_tuple)
 
-        # Generate adversarial opponents avoiding start, walls, and food
         self.opponents = []
         while len(self.opponents) < num_opponents:
             ox = random.randint(0, self.width - 1)
@@ -62,24 +57,67 @@ class VisualGridHuntGame:
         self.steps = 0
         self.collision = False
 
-    # ---------- Step 1.1: Partial Observability ----------
-    def _direction_vector(self):
-        return DIRECTION_VECTORS[self.facing]
+    # ---------- Partial Observability ----------
+    def _direction_vector(self, facing=None):
+        if facing is None:
+            facing = self.facing
+        return DIRECTION_VECTORS[facing]
+
+    def _cell_in_direction(self, facing, distance=1):
+        dx, dy = self._direction_vector(facing)
+        return (self.agent_pos[0] + dx * distance, self.agent_pos[1] + dy * distance)
+
+    def _is_wall_or_out(self, cell):
+        x, y = cell
+        in_bounds = 0 <= x < self.width and 0 <= y < self.height
+        return (not in_bounds) or (cell in self.walls)
+
+    def _nearest_food_distance_in_line(self, facing, max_dist=4):
+        for d in range(1, max_dist + 1):
+            c = self._cell_in_direction(facing, d)
+            if self._is_wall_or_out(c):
+                return 0
+            if c in self.food_positions:
+                return d
+        return 0
 
     def get_percept(self) -> dict:
-
-        dx, dy = self._direction_vector()
-        ahead = (self.agent_pos[0] + dx, self.agent_pos[1] + dy)
-        in_bounds = 0 <= ahead[0] < self.width and 0 <= ahead[1] < self.height
-        wall_ahead = (not in_bounds) or (ahead in self.walls)
-
         current = tuple(self.agent_pos)
+
+        ahead_facing = self.facing
+        left_facing = FACING_ORDER[(FACING_ORDER.index(self.facing) - 1) % 4]
+        right_facing = FACING_ORDER[(FACING_ORDER.index(self.facing) + 1) % 4]
+
+        ahead_cell = self._cell_in_direction(ahead_facing, 1)
+        left_cell = self._cell_in_direction(left_facing, 1)
+        right_cell = self._cell_in_direction(right_facing, 1)
+
+        wall_ahead = self._is_wall_or_out(ahead_cell)
+        wall_left = self._is_wall_or_out(left_cell)
+        wall_right = self._is_wall_or_out(right_cell)
+
+        food_here = current in self.food_positions
+        food_ahead = (not wall_ahead) and (ahead_cell in self.food_positions)
+        food_left = (not wall_left) and (left_cell in self.food_positions)
+        food_right = (not wall_right) and (right_cell in self.food_positions)
+
+        food_ahead_dist = self._nearest_food_distance_in_line(ahead_facing, max_dist=4)
+        food_left_dist = self._nearest_food_distance_in_line(left_facing, max_dist=4)
+        food_right_dist = self._nearest_food_distance_in_line(right_facing, max_dist=4)
 
         return {
             'wall_ahead': wall_ahead,
-            'food_here': current in self.food_positions,
+            'wall_left': wall_left,
+            'wall_right': wall_right,
+            'food_here': food_here,
+            'food_ahead': food_ahead,
+            'food_left': food_left,
+            'food_right': food_right,
+            'food_ahead_dist': food_ahead_dist,
+            'food_left_dist': food_left_dist,
+            'food_right_dist': food_right_dist,
             'toxin_here': current in self.toxic_traps,
-            'facing': self.facing,       # proprioception (agent knows its own orientation)
+            'facing': self.facing,
             'collision': self.collision,
             'score': self.score,
             'remaining_food': len(self.food_positions),
@@ -102,7 +140,7 @@ class VisualGridHuntGame:
             new_pos = [self.agent_pos[0] + dx, self.agent_pos[1] + dy]
             in_bounds = 0 <= new_pos[0] < self.width and 0 <= new_pos[1] < self.height
             if not in_bounds or tuple(new_pos) in self.walls:
-                self.score -= 5  # bumped into a wall / edge
+                self.score -= 5
             else:
                 self.agent_pos = new_pos
         elif action == 'suck':
@@ -110,14 +148,11 @@ class VisualGridHuntGame:
             if pos_t in self.food_positions:
                 self.food_positions.remove(pos_t)
                 self.score += 20
-        # 'Stay' / unrecognized actions do nothing besides costing a step
 
-        # Check if standing on a toxic trap
         pos_t = tuple(self.agent_pos)
         if pos_t in self.toxic_traps:
             self.score -= 15
 
-        # Move opponents randomly
         for op in self.opponents:
             move = random.choice(['Up', 'Down', 'Left', 'Right', 'Stay'])
             if move == 'Up' and op[1] < self.height - 1:
@@ -134,14 +169,10 @@ class VisualGridHuntGame:
                 self.collision = True
 
     def is_done(self) -> bool:
-        return len(self.food_positions) == 0 or self.steps >= 60 or self.collision
+        return len(self.food_positions) == 0 or self.steps >= 220 or self.collision
 
 
-# ======================================================================
-# Step 1.2: Simple Reflex Agent
-# ======================================================================
 class SimpleReflexAgent:
-
     def sense_and_act(self, percept: dict) -> str:
         if percept['food_here']:
             return 'suck'
@@ -151,18 +182,22 @@ class SimpleReflexAgent:
             return 'move_forward'
 
 
-# ======================================================================
-# Step 1.3: Model-Based Agent
-# ======================================================================
 class ModelBasedAgent:
-
     def __init__(self):
-        # Internal (believed) state -- starts matching the environment's
-        # known starting convention, but is derived only from self-tracking.
         self.believed_pos = (0, 0)
         self.believed_facing = 'Up'
         self.visited_cells = {(0, 0)}
+        self.blocked_edges = set()
+        self.toxin_cells = set()
         self.last_action = None
+
+        self.state_counts = {}
+        self.escape_mode_steps = 0
+        self.force_forward_steps = 0
+        self.empty_view_counts = {}
+
+        # NEW: short action history to penalize immediate undo
+        self.action_history = []
 
     def _peek_facing(self, step):
         idx = FACING_ORDER.index(self.believed_facing)
@@ -172,71 +207,199 @@ class ModelBasedAgent:
         dx, dy = DIRECTION_VECTORS[facing]
         return (self.believed_pos[0] + dx, self.believed_pos[1] + dy)
 
-    def _update_state(self):
-        """Transition model: integrate the effect of the last action taken."""
+    def _update_state(self, percept: dict):
         if self.last_action == 'turn_left':
             self.believed_facing = self._peek_facing(-1)
         elif self.last_action == 'turn_right':
             self.believed_facing = self._peek_facing(1)
         elif self.last_action == 'move_forward':
-            # We only ever issue move_forward when we believe there's no
-            # wall ahead, so in this deterministic world it succeeds.
-            self.believed_pos = self._cell_ahead(self.believed_facing)
+            if percept['wall_ahead']:
+                self.blocked_edges.add((self.believed_pos, self.believed_facing))
+            else:
+                self.believed_pos = self._cell_ahead(self.believed_facing)
 
         self.visited_cells.add(self.believed_pos)
+        if percept.get('toxin_here', False):
+            self.toxin_cells.add(self.believed_pos)
+
+        key = (self.believed_pos, self.believed_facing)
+        self.state_counts[key] = self.state_counts.get(key, 0) + 1
+        if self.state_counts[key] >= 4 and self.escape_mode_steps == 0:
+            self.escape_mode_steps = 4
+
+        no_food_visible = (
+            percept.get('food_ahead_dist', 0) == 0 and
+            percept.get('food_left_dist', 0) == 0 and
+            percept.get('food_right_dist', 0) == 0
+        )
+        if no_food_visible:
+            self.empty_view_counts[key] = self.empty_view_counts.get(key, 0) + 1
+
+    def _remember_action(self, action):
+        self.action_history.append(action)
+        if len(self.action_history) > 4:
+            self.action_history.pop(0)
+
+    def _candidate(self, rel_turn):
+        if rel_turn == 0:
+            next_facing = self.believed_facing
+            action = 'move_forward'
+            next_pos = self._cell_ahead(next_facing)
+            blocked = (self.believed_pos, next_facing) in self.blocked_edges
+        elif rel_turn == -1:
+            next_facing = self._peek_facing(-1)
+            action = 'turn_left'
+            next_pos = self.believed_pos
+            blocked = False
+        else:
+            next_facing = self._peek_facing(1)
+            action = 'turn_right'
+            next_pos = self.believed_pos
+            blocked = False
+        return next_pos, next_facing, blocked, action
 
     def sense_and_act(self, percept: dict) -> str:
-        # 1. Update internal state/model using last action + new percept
-        self._update_state()
+        self._update_state(percept)
 
-        wall_ahead = percept['wall_ahead']
-        food_here = percept['food_here']
-
-        # 2. Decide using memory-augmented rules
-        if food_here:
+        # 1) Immediate collection
+        if percept['food_here']:
             action = 'suck'
-        else:
-            left_facing = self._peek_facing(-1)
-            left_cell = self._cell_ahead(left_facing)
-            ahead_cell = self._cell_ahead(self.believed_facing)
+            self.last_action = action
+            self._remember_action(action)
+            return action
 
-            if wall_ahead:
-                # IF wall_ahead AND left_is_visited THEN turn_right
-                if left_cell in self.visited_cells:
-                    action = 'turn_right'
-                else:
-                    action = 'turn_left'
-            elif ahead_cell in self.visited_cells:
-                # Already been where we're about to go -- try somewhere new
-                if left_cell not in self.visited_cells:
-                    action = 'turn_left'
-                else:
-                    action = 'turn_right'
-            else:
+        # 2) Commit forward once after directional turn
+        if self.force_forward_steps > 0:
+            if not percept['wall_ahead']:
                 action = 'move_forward'
+                self.force_forward_steps -= 1
+                self.last_action = action
+                self._remember_action(action)
+                return action
+            else:
+                self.force_forward_steps = 0
+
+        # 3) Strong food-targeting by nearest visible direction
+        ahead_d = percept.get('food_ahead_dist', 0)
+        left_d = percept.get('food_left_dist', 0)
+        right_d = percept.get('food_right_dist', 0)
+
+        candidates = []
+        if ahead_d > 0 and not percept['wall_ahead']:
+            candidates.append(('ahead', ahead_d))
+        if left_d > 0 and not percept['wall_left']:
+            candidates.append(('left', left_d))
+        if right_d > 0 and not percept['wall_right']:
+            candidates.append(('right', right_d))
+
+        if candidates:
+            candidates.sort(key=lambda x: x[1])
+            direction = candidates[0][0]
+            if direction == 'ahead':
+                action = 'move_forward'
+            elif direction == 'left':
+                action = 'turn_left'
+                self.force_forward_steps = 1
+            else:
+                action = 'turn_right'
+                self.force_forward_steps = 1
+
+            self.last_action = action
+            self._remember_action(action)
+            return action
+
+        # 4) Late-game aggressive mode (step minimizer)
+        if percept['remaining_food'] <= 3:
+            if not percept['wall_ahead']:
+                action = 'move_forward'
+            elif not percept['wall_right']:
+                action = 'turn_right'
+            else:
+                action = 'turn_left'
+            self.last_action = action
+            self._remember_action(action)
+            return action
+
+        # 5) Escape mode
+        if self.escape_mode_steps > 0:
+            if not percept['wall_ahead']:
+                action = 'move_forward'
+            elif not percept['wall_right']:
+                action = 'turn_right'
+            else:
+                action = 'turn_left'
+            self.escape_mode_steps -= 1
+            self.last_action = action
+            self._remember_action(action)
+            return action
+
+        # 6) Memory-guided scoring
+        options = []
+        for rel_turn in (0, -1, 1):
+            next_pos, next_facing, blocked, candidate_action = self._candidate(rel_turn)
+            score = 0
+
+            if candidate_action == 'move_forward' and (blocked or percept['wall_ahead']):
+                score -= 100
+
+            if candidate_action == 'move_forward':
+                if next_pos not in self.visited_cells:
+                    score += 16
+                else:
+                    score -= 5
+
+            if candidate_action == 'move_forward' and next_pos in self.toxin_cells:
+                score -= 30
+
+            # Stronger forward preference (fewer turns)
+            if candidate_action == 'move_forward':
+                score += 6
+            else:
+                score += 0
+
+            score -= 2 * self.state_counts.get((next_pos, next_facing), 0)
+            score -= 3 * self.empty_view_counts.get((next_pos, next_facing), 0)
+
+            # Penalize immediate turn-undo patterns
+            if len(self.action_history) >= 1:
+                last = self.action_history[-1]
+                if (last == 'turn_left' and candidate_action == 'turn_right') or \
+                   (last == 'turn_right' and candidate_action == 'turn_left'):
+                    score -= 4
+
+            options.append((score, candidate_action))
+
+        options.sort(reverse=True, key=lambda x: x[0])
+        action = options[0][1]
+
+        if percept['wall_ahead'] and action == 'move_forward':
+            action = 'turn_right'
 
         self.last_action = action
+        self._remember_action(action)
         return action
 
 
 class GridGameGUI:
-
     def __init__(self, root, width=10, height=10, num_food=12, num_opponents=2, walls=None, agent_type='model', start_pos=(0, 0)):
         self.root = root
         self.root.title("IT3012 - Scalable Multi-Agent Grid Hunt")
-        self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
-                                       custom_walls=walls, start_pos=start_pos)
+        self.env = VisualGridHuntGame(
+            width=width,
+            height=height,
+            num_food=num_food,
+            num_opponents=num_opponents,
+            custom_walls=walls,
+            start_pos=start_pos
+        )
 
-        # Choose which kind of agent drives the simulation
         if agent_type == 'simple':
             self.agent = SimpleReflexAgent()
         else:
             self.agent = ModelBasedAgent()
 
-        # Dynamically calculate cell size so the total canvas fits nicely within a 600x600 window ceiling
         max_canvas_dim = 600
         self.cell_size = max(20, min(max_canvas_dim // self.env.width, max_canvas_dim // self.env.height))
-
         canvas_w = self.env.width * self.cell_size
         canvas_h = self.env.height * self.cell_size
 
@@ -254,7 +417,6 @@ class GridGameGUI:
     def draw_grid(self):
         self.canvas.delete("all")
 
-        # Draw base grid and walls
         for x in range(self.env.width):
             for y in range(self.env.height):
                 x1 = x * self.cell_size
@@ -265,49 +427,58 @@ class GridGameGUI:
                 color = "#f1f5f9" if (x, y) not in self.env.walls else "#64748b"
                 self.canvas.create_rectangle(x1, y1, x2, y2, fill=color, outline="#cbd5e1")
 
-                # Only draw text if cell is large enough
                 if self.cell_size >= 40 and (x, y) in self.env.walls:
-                    self.canvas.create_text(x1 + self.cell_size / 2, y1 + self.cell_size / 2, text="W", fill="white", font=("Arial", 8, "bold"))
+                    self.canvas.create_text(
+                        x1 + self.cell_size / 2,
+                        y1 + self.cell_size / 2,
+                        text="W",
+                        fill="white",
+                        font=("Arial", 8, "bold")
+                    )
 
-        # Draw food
         for fx, fy in self.env.food_positions:
             offset = self.cell_size * 0.25
             x1 = fx * self.cell_size + offset
             y1 = (self.env.height - 1 - fy) * self.cell_size + offset
-            self.canvas.create_oval(x1, y1, x1 + self.cell_size * 0.5, y1 + self.cell_size * 0.5, fill="#f59e0b", outline="#d97706")
+            self.canvas.create_oval(
+                x1, y1, x1 + self.cell_size * 0.5, y1 + self.cell_size * 0.5,
+                fill="#f59e0b", outline="#d97706"
+            )
 
-        # Draw toxic traps (purple triangles)
         for tx, ty in self.env.toxic_traps:
             offset = self.cell_size * 0.25
             x1 = tx * self.cell_size + offset
             y1 = (self.env.height - 1 - ty) * self.cell_size + offset
             self.canvas.create_polygon(
-                x1 + self.cell_size * 0.25, y1,                             # Top point
-                x1 + self.cell_size * 0.5, y1 + self.cell_size * 0.5,       # Bottom right
-                x1, y1 + self.cell_size * 0.5,                              # Bottom left
+                x1 + self.cell_size * 0.25, y1,
+                x1 + self.cell_size * 0.5, y1 + self.cell_size * 0.5,
+                x1, y1 + self.cell_size * 0.5,
                 fill="#9333ea", outline="#581c87"
             )
 
-        # Draw opponents
         for ox, oy in self.env.opponents:
             offset = self.cell_size * 0.2
             x1 = ox * self.cell_size + offset
             y1 = (self.env.height - 1 - oy) * self.cell_size + offset
-            self.canvas.create_rectangle(x1, y1, x1 + self.cell_size * 0.6, y1 + self.cell_size * 0.6, fill="#990000", outline="#7a0000")
+            self.canvas.create_rectangle(
+                x1, y1, x1 + self.cell_size * 0.6, y1 + self.cell_size * 0.6,
+                fill="#990000", outline="#7a0000"
+            )
 
-        # Draw agent
         ax, ay = self.env.agent_pos
         offset = self.cell_size * 0.15
         x1 = ax * self.cell_size + offset
         y1 = (self.env.height - 1 - ay) * self.cell_size + offset
-        self.canvas.create_oval(x1, y1, x1 + self.cell_size * 0.7, y1 + self.cell_size * 0.7, fill="#000066", outline="#1e3a8a")
+        self.canvas.create_oval(
+            x1, y1, x1 + self.cell_size * 0.7, y1 + self.cell_size * 0.7,
+            fill="#000066", outline="#1e3a8a"
+        )
 
-        # Draw a small facing indicator so you can visually track orientation
         cx = ax * self.cell_size + self.cell_size / 2
         cy = (self.env.height - 1 - ay) * self.cell_size + self.cell_size / 2
         dx, dy = DIRECTION_VECTORS[self.env.facing]
         tip_x = cx + dx * self.cell_size * 0.4
-        tip_y = cy - dy * self.cell_size * 0.4  # canvas y grows downward
+        tip_y = cy - dy * self.cell_size * 0.4
         self.canvas.create_line(cx, cy, tip_x, tip_y, fill="#ffffff", width=3, arrow=tk.LAST)
 
     def run_loop(self):
@@ -317,12 +488,21 @@ class GridGameGUI:
             if not self.env.is_done():
                 percept = self.env.get_percept()
                 action = self.agent.sense_and_act(percept)
+
+                # print(f"Step {self.env.steps}: percept={percept}, action={action}")
+
                 self.env.execute_action(action)
                 self.draw_grid()
-                self.label.config(text=f"Score: {self.env.score} | Steps: {self.env.steps} | Facing: {self.env.facing} | Action: {action}")
+                self.label.config(
+                    text=f"Score: {self.env.score} | Steps: {self.env.steps} | Facing: {self.env.facing} | Action: {action}"
+                )
                 self.root.after(250, step)
             else:
-                end_text = f"Collision! Game Over! Final Score: {self.env.score}" if self.env.collision else f"Finished! Final Score: {self.env.score}"
+                end_text = (
+                    f"Collision! Game Over! Final Score: {self.env.score}"
+                    if self.env.collision else
+                    f"Finished! Final Score: {self.env.score}"
+                )
                 self.label.config(text=end_text)
                 self.btn.config(state="normal")
 
@@ -331,10 +511,17 @@ class GridGameGUI:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    # Verified loop trap: SimpleReflexAgent cycles this 6-cell loop forever;
-    # ModelBasedAgent breaks out on its 3rd wall-hit via turn_right.
+
     loop_walls = {(8, 8), (7, 4), (5, 4), (6, 8), (7, 5), (4, 7)}
-    app = GridGameGUI(root, width=12, height=12, num_food=15, num_opponents=0,
-                       walls=loop_walls, start_pos=(6, 6), agent_type='model')
+    app = GridGameGUI(
+        root,
+        width=12,
+        height=12,
+        num_food=15,
+        num_opponents=0,
+        walls=loop_walls,
+        start_pos=(6, 6),
+        agent_type='model'
+    )
 
     root.mainloop()
