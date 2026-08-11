@@ -165,6 +165,32 @@ class GridGameGUI:
                     self.canvas.create_text(x1 + self.cell_size / 2, y1 + self.cell_size / 2, text="W", fill="white",
                                             font=("Arial", 8, "bold"))
 
+        # Draw toxic traps as purple triangles
+        for tx, ty in self.env.toxic_traps:
+            offset = self.cell_size * 0.20
+
+            x1 = tx * self.cell_size + offset
+            y1 = (self.env.height - 1 - ty) * self.cell_size + offset
+
+            x2 = tx * self.cell_size + self.cell_size - offset
+            y2 = y1
+
+            x3 = tx * self.cell_size + self.cell_size / 2
+            y3 = (
+                (self.env.height - 1 - ty) * self.cell_size
+                + self.cell_size
+                - offset
+            )
+
+            self.canvas.create_polygon(
+                x1, y1,
+                x2, y2,
+                x3, y3,
+                fill="purple",
+                outline="#4c1d95",
+                width=2
+            )
+
         for fx, fy in self.env.food_positions:
             offset = self.cell_size * 0.25
             x1 = fx * self.cell_size + offset
