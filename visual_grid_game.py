@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 # visual_grid_game.py
+=======
+>>>>>>> main
 import random
 import tkinter as tk
 
