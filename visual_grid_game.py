@@ -2,6 +2,10 @@
 import random
 import tkinter as tk
 
+from agent import SearchAgent
+
+ACTION_MAP = {'UP': 'Up', 'DOWN': 'Down', 'LEFT': 'Left', 'RIGHT': 'Right', 'STOP': 'STOP'}
+
 
 class VisualGridHuntGame:
     """A flexible Pacman-style grid environment with support for configurable opponents and larger scales."""
@@ -132,9 +136,10 @@ class VisualGridHuntGame:
 class GridGameGUI:
     """Tkinter wrapper that dynamically scales cell sizes to keep larger grids on screen."""
 
-    def __init__(self, root, width=10, height=10, num_food=12, num_opponents=2, num_traps=5, walls=None):
+    def __init__(self, root, width=10, height=10, num_food=12, num_opponents=2, num_traps=5, walls=None,
+                 active_algo='BFS'):
         self.root = root
-        self.root.title("IT3012 - Scalable Multi-Agent Grid Hunt")
+        self.root.title(f"IT3012 - Scalable Multi-Agent Grid Hunt ({active_algo})")
 
         self.env = VisualGridHuntGame(
             width=width,
@@ -144,6 +149,7 @@ class GridGameGUI:
             num_traps=num_traps,
             custom_walls=walls,
         )
+        self.agent = SearchAgent(active_algo=active_algo)
 
         # Dynamically calculate cell size so the total canvas fits nicely within a 600x600 window ceiling
         max_canvas_dim = 600
@@ -227,7 +233,15 @@ class GridGameGUI:
 
         def step():
             if not self.env.is_done():
-                action = random.choice(['Up', 'Down', 'Left', 'Right'])
+                percept = self.env.get_percept()
+                raw_action = self.agent.sense_and_act(percept)
+                action = ACTION_MAP.get(raw_action, 'STOP')
+
+                if action == 'STOP':
+                    self.label.config(text=f"No path to remaining food! Score: {self.env.score}")
+                    self.btn.config(state="normal")
+                    return
+
                 self.env.execute_action(action)
 
                 self.draw_grid()
@@ -244,5 +258,6 @@ class GridGameGUI:
 if __name__ == "__main__":
     root = tk.Tk()
     # Try a larger grid size like 12x12 with 15 food and 3 opponents!
-    app = GridGameGUI(root, width=12, height=12, num_food=15, num_opponents=0)
+    # Observation Task: switch active_algo between 'BFS', 'DFS', 'UCS' and re-run to compare paths.
+    app = GridGameGUI(root, width=12, height=12, num_food=15, num_opponents=0, active_algo='BFS')
     root.mainloop()

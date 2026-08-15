@@ -1,4 +1,9 @@
 # agent.py
+import random
+import heapq
+from collections import deque
+
+
 class GreedyGridAgent:
     """A simple agent that tries to move around systematically to clear the grid."""
 
@@ -20,8 +25,8 @@ class SearchAgent:
         x, y = state
         width, height = grid_size
         actions = [
-            ('UP', (x, y - 1)),
-            ('DOWN', (x, y + 1)),
+            ('UP', (x, y + 1)),
+            ('DOWN', (x, y - 1)),
             ('LEFT', (x - 1, y)),
             ('RIGHT', (x + 1, y))
         ]
@@ -81,7 +86,7 @@ class SearchAgent:
 
     def sense_and_act(self, percept):
         if not self.plan:
-            start = percept['position']
+            start = tuple(percept['agent_pos'])
             all_food = percept['all_food']
             if not all_food:
                 return 'STOP'
