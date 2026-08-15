@@ -1,6 +1,7 @@
 # visual_grid_game.py
 import random
 import tkinter as tk
+from agent import SearchAgent
 
 
 class VisualGridHuntGame:
@@ -63,7 +64,11 @@ class VisualGridHuntGame:
             'score': self.score,
             'remaining_food': len(self.food_positions),
             # Step 2.2: New sensor - True if agent is adjacent to or on a toxic trap
-            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps
+            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps,
+            # Step 1.1: Expose the global world model to the planning agent
+            'grid_size': (self.width, self.height),
+            'walls': list(self.walls),
+            'all_food': list(self.food_positions)
         }
 
     def execute_action(self, action: str):
@@ -121,6 +126,11 @@ class GridGameGUI:
 
         self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
                                       custom_walls=walls)
+
+        # Practical 03: the planning agent that will drive the simulation.
+        # Change self.agent.active_algo to 'BFS', 'DFS' or 'UCS' to compare paths.
+        self.agent = SearchAgent()
+        self.agent.active_algo = 'BFS'
 
         # Dynamically calculate cell size so the total canvas fits nicely within a 600x600 window ceiling
         max_canvas_dim = 600
@@ -198,11 +208,15 @@ class GridGameGUI:
 
         def step():
             if not self.env.is_done():
-                action = random.choice(['Up', 'Down', 'Left', 'Right'])
+                # Practical 03: ask the planning agent for its next action.
+                percept = self.env.get_percept()
+                action = self.agent.sense_and_act(percept)
                 self.env.execute_action(action)
 
                 self.draw_grid()
-                self.label.config(text=f"Score: {self.env.score} | Steps: {self.env.steps} | Action: {action}")
+                self.label.config(
+                    text=f"[{self.agent.active_algo}] Score: {self.env.score} | "
+                         f"Steps: {self.env.steps} | Action: {action}")
                 self.root.after(250, step)
             else:
                 end_text = f"Collision! Game Over! Final Score: {self.env.score}" if self.env.collision else f"Finished! Final Score: {self.env.score}"
