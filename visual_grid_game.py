@@ -228,9 +228,10 @@ class GridGameGUI:
 if __name__ == "__main__":
     root = tk.Tk()
     
-    # Try changing this to agents.ModelBasedAgent() to see the difference!
-    test_agent = agents.SimpleReflexAgent()
+    # Use the SearchAgent we just built! 
+    # (To test different algorithms, go to agent.py and change self.active_algo to 'DFS' or 'UCS')
+    test_agent = agents.SearchAgent()
     
-    # Try a larger grid size like 12x12 with 15 food and 3 opponents!
+    # Try a larger grid size like 12x12 with 15 food and 0 opponents (search agents are best tested without moving opponents first)!
     app = GridGameGUI(root, agent=test_agent, width=12, height=12, num_food=15, num_opponents=0)
     root.mainloop()
