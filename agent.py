@@ -1,5 +1,6 @@
 # agent.py
 import random
+import heapq
 from collections import deque
 
 
@@ -110,6 +111,8 @@ class SearchAgent:
             'Left': (-1, 0),
             'Right': (1, 0),
         }
+        self.plan = []
+        self.active_algo = 'BFS'
 
     def bfs_search(self, start_pos, goal_pos, walls, grid_size):
         start = tuple(start_pos)
@@ -133,4 +136,83 @@ class SearchAgent:
                     visited.add(next_pos)
                     queue.append((next_pos, path + [action]))
 
-        return None
+        return []
+
+    def dfs_search(self, start_pos, goal_pos, walls, grid_size):
+        start = tuple(start_pos)
+        goal = tuple(goal_pos)
+        wall_set = set(walls)
+        width, height = grid_size
+        stack = [(start, [])]
+        visited = set()
+
+        while stack:
+            (x, y), path = stack.pop()
+            if (x, y) == goal:
+                return path
+
+            if (x, y) in visited:
+                continue
+            visited.add((x, y))
+
+            for action, (dx, dy) in self.actions.items():
+                nx = x + dx
+                ny = y + dy
+                next_pos = (nx, ny)
+
+                if 0 <= nx < width and 0 <= ny < height and next_pos not in wall_set and next_pos not in visited:
+                    stack.append((next_pos, path + [action]))
+
+        return []
+
+    def ucs_search(self, start_pos, goal_pos, walls, grid_size):
+        start = tuple(start_pos)
+        goal = tuple(goal_pos)
+        wall_set = set(walls)
+        width, height = grid_size
+        pq = [(0, start, [])]  # (cost, pos, path)
+        visited = set()
+
+        while pq:
+            cost, (x, y), path = heapq.heappop(pq)
+            if (x, y) == goal:
+                return path
+            
+            if (x, y) in visited:
+                continue
+            visited.add((x, y))
+
+            for action, (dx, dy) in self.actions.items():
+                nx = x + dx
+                ny = y + dy
+                next_pos = (nx, ny)
+
+                if 0 <= nx < width and 0 <= ny < height and next_pos not in wall_set and next_pos not in visited:
+                    heapq.heappush(pq, (cost + 1, next_pos, path + [action]))
+
+        return []
+
+    def sense_and_act(self, percept: dict) -> str:
+        if not self.plan:
+            all_food = percept.get('all_food', [])
+            agent_pos = percept.get('agent_pos', [0, 0])
+            
+            if not all_food:
+                return 'Right'  # No food left
+                
+            # Find the closest food pellet using Manhattan distance
+            closest_food = min(all_food, key=lambda f: abs(f[0] - agent_pos[0]) + abs(f[1] - agent_pos[1]))
+            walls = percept.get('walls', [])
+            grid_size = percept.get('grid_size', (10, 10))
+
+            if self.active_algo == 'BFS':
+                self.plan = self.bfs_search(agent_pos, closest_food, walls, grid_size)
+            elif self.active_algo == 'DFS':
+                self.plan = self.dfs_search(agent_pos, closest_food, walls, grid_size)
+            elif self.active_algo == 'UCS':
+                self.plan = self.ucs_search(agent_pos, closest_food, walls, grid_size)
+                
+            if not self.plan:
+                return 'Right'  # Fallback if no path is found
+                
+        return self.plan.pop(0)

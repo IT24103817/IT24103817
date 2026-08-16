@@ -70,7 +70,11 @@ class VisualGridHuntGame:
             'wall_ahead': is_wall_ahead,
             'collision': self.collision,
             'score': self.score,
-            'remaining_food': len(self.food_positions)
+            'remaining_food': len(self.food_positions),
+            'grid_size': (self.width, self.height),
+            'walls': list(self.walls),
+            'all_food': list(self.food_positions),
+            'agent_pos': list(self.agent_pos)
         }
 
     def execute_action(self, action: str):
