@@ -136,8 +136,8 @@ class GridGameGUI:
         self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
                                       custom_walls=walls)
 
-        # Dynamically calculate cell size so the total canvas fits nicely within a 600x600 window ceiling
-        max_canvas_dim = 600
+        # Dynamically calculate cell size so the total canvas fits nicely within a smaller window ceiling
+        max_canvas_dim = 450
         self.cell_size = max(20, min(max_canvas_dim // self.env.width, max_canvas_dim // self.env.height))
 
         canvas_w = self.env.width * self.cell_size
