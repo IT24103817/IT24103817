@@ -1,4 +1,5 @@
 from collections import deque
+import heapq
 
 
 class GreedyGridAgent:
@@ -205,7 +206,11 @@ class ModelBasedAgent:
         return action
     
 class SearchAgent:
-    """Breadth-First Search agent for Practical 03."""
+    """Goal-based planning agent
+    The agent plans a complete path to one food pellet using an
+    uninformed search strategy, then executes the stored plan one
+    action at a time.
+    """
 
     ACTIONS = [
         ('Up', (0, 1)),
@@ -214,92 +219,263 @@ class SearchAgent:
         ('Right', (1, 0))
     ]
 
-    def bfs_search(
-        self,
-        start_pos,
-        goal_pos,
-        walls,
-        grid_size
-    ):
+    def __init__(self):
+        # Step 1.3: offline plan and active search algorithm.
+        self.plan = []
+        self.active_algo = 'BFS'
 
+        # The practical's environment starts the agent at (0, 0).
+        # We maintain an internal position model because the agent
+        # is not given agent_pos in the percept.
+        self.estimated_position = [0, 0]
+        self.last_action = None
+
+    @staticmethod
+    def _normalise_walls(walls):
+        return {tuple(wall) for wall in walls}
+
+    @staticmethod
+    def _in_bounds(position, grid_size):
         width, height = grid_size
-
-        walls = set(
-            tuple(w)
-            for w in walls
+        return (
+            0 <= position[0] < width
+            and 0 <= position[1] < height
         )
 
-        start = tuple(start_pos)
+    def _successor(self, position, delta, walls, grid_size):
+        next_position = (
+            position[0] + delta[0],
+            position[1] + delta[1]
+        )
 
-        goal = tuple(goal_pos)
-
-        # Invalid positions
-        if start in walls or goal in walls:
-
+        if not self._in_bounds(next_position, grid_size):
             return None
 
-        # Already at goal
-        if start == goal:
+        if next_position in walls:
+            return None
 
+        return next_position
+
+    def bfs_search(self, start_pos, goal_pos, walls, grid_size):
+        """Breadth-First Search using a FIFO queue.
+        """
+        walls = self._normalise_walls(walls)
+        start = tuple(start_pos)
+        goal = tuple(goal_pos)
+
+        if not self._in_bounds(start, grid_size) or not self._in_bounds(goal, grid_size):
+            return None
+
+        if start in walls or goal in walls:
+            return None
+
+        if start == goal:
             return []
 
-        
-        # BFS queue
-        queue = deque(
-            [(start, [])]
-        )
-
-        visited = {start}
+        queue = deque([(start, [])])
+        reached = {start}
 
         while queue:
-
             current, path = queue.popleft()
 
-            for action, (dx, dy) in self.ACTIONS:
-
-                next_position = (
-                    current[0] + dx,
-                    current[1] + dy
+            for action, delta in self.ACTIONS:
+                next_position = self._successor(
+                    current, delta, walls, grid_size
                 )
 
-                # Check boundaries
-                if not (
-                    0 <= next_position[0] < width
-                    and
-                    0 <= next_position[1] < height
-                ):
-
+                if next_position is None or next_position in reached:
                     continue
 
-                # Check walls
-                if next_position in walls:
+                new_path = path + [action]
 
-                    continue
-
-                # Already visited
-                if next_position in visited:
-
-                    continue
-
-                new_path = (
-                    path + [action]
-                )
-
-                # Goal reached
                 if next_position == goal:
-
                     return new_path
 
-                visited.add(
-                    next_position
-                )
+                reached.add(next_position)
+                queue.append((next_position, new_path))
 
-                queue.append(
-                    (
-                        next_position,
-                        new_path
-                    )
-                )
-
-        # No path
         return None
+
+    def dfs_search(self, start_pos, goal_pos, walls, grid_size):
+        """Depth-First Search using a LIFO stack."""
+        walls = self._normalise_walls(walls)
+        start = tuple(start_pos)
+        goal = tuple(goal_pos)
+
+        if not self._in_bounds(start, grid_size) or not self._in_bounds(goal, grid_size):
+            return None
+
+        if start in walls or goal in walls:
+            return None
+
+        if start == goal:
+            return []
+
+        stack = [(start, [])]
+        reached = {start}
+
+        while stack:
+            current, path = stack.pop()
+
+            if current == goal:
+                return path
+
+            # Reverse insertion so the first action in ACTIONS is
+            # explored first while the frontier remains a LIFO stack.
+            for action, delta in reversed(self.ACTIONS):
+                next_position = self._successor(
+                    current, delta, walls, grid_size
+                )
+
+                if next_position is None or next_position in reached:
+                    continue
+
+                reached.add(next_position)
+                stack.append(
+                    (next_position, path + [action])
+                )
+
+        return None
+
+    def ucs_search(self, start_pos, goal_pos, walls, grid_size):
+        """Uniform-Cost Search using a priority queue
+        """
+        walls = self._normalise_walls(walls)
+        start = tuple(start_pos)
+        goal = tuple(goal_pos)
+
+        if not self._in_bounds(start, grid_size) or not self._in_bounds(goal, grid_size):
+            return None
+
+        if start in walls or goal in walls:
+            return None
+
+        if start == goal:
+            return []
+
+        counter = 0
+        frontier = [(0, counter, start, [])]
+        reached = {start}
+        best_cost = {start: 0}
+
+        while frontier:
+            cost, _, current, path = heapq.heappop(frontier)
+
+            # Ignore stale priority-queue entries.
+            if cost != best_cost.get(current):
+                continue
+
+            if current == goal:
+                return path
+
+            for action, delta in self.ACTIONS:
+                next_position = self._successor(
+                    current, delta, walls, grid_size
+                )
+
+                if next_position is None:
+                    continue
+
+                new_cost = cost + 1
+
+                if new_cost < best_cost.get(next_position, float('inf')):
+                    best_cost[next_position] = new_cost
+                    reached.add(next_position)
+                    counter += 1
+                    heapq.heappush(
+                        frontier,
+                        (
+                            new_cost,
+                            counter,
+                            next_position,
+                            path + [action]
+                        )
+                    )
+
+        return None
+
+    def _search(self, start_pos, goal_pos, walls, grid_size):
+        """Run the search algorithm selected by active_algo."""
+        if self.active_algo == 'DFS':
+            return self.dfs_search(
+                start_pos, goal_pos, walls, grid_size
+            )
+
+        if self.active_algo == 'UCS':
+            return self.ucs_search(
+                start_pos, goal_pos, walls, grid_size
+            )
+
+        # Default required by the practical.
+        return self.bfs_search(
+            start_pos, goal_pos, walls, grid_size
+        )
+
+    def _update_estimated_position(self, percept):
+        """Update the internal position after the previous action.
+        """
+        if self.last_action is None:
+            return
+
+        grid_size = percept.get('grid_size')
+        walls = self._normalise_walls(percept.get('walls', []))
+
+        action_delta = dict(self.ACTIONS).get(self.last_action)
+        if action_delta is None or grid_size is None:
+            return
+
+        candidate = (
+            self.estimated_position[0] + action_delta[0],
+            self.estimated_position[1] + action_delta[1]
+        )
+
+        if (
+            self._in_bounds(candidate, grid_size)
+            and candidate not in walls
+        ):
+            self.estimated_position = list(candidate)
+
+    def sense_and_act(self, percept: dict) -> str:
+        """Plan to the closest food, then execute the plan step-by-step."""
+        self._update_estimated_position(percept)
+
+        if not self.plan:
+            all_food = [
+                tuple(food)
+                for food in percept.get('all_food', [])
+            ]
+
+            if not all_food:
+                # The environment should normally terminate before this.
+                self.last_action = 'Up'
+                return 'Up'
+
+            start = tuple(self.estimated_position)
+
+            # "Closest" is measured by Manhattan distance, which is
+            # appropriate for the four-direction grid representation.
+            goal = min(
+                all_food,
+                key=lambda food: (
+                    abs(food[0] - start[0])
+                    + abs(food[1] - start[1])
+                )
+            )
+
+            self.plan = self._search(
+                start,
+                goal,
+                percept.get('walls', []),
+                percept.get('grid_size', (0, 0))
+            ) or []
+
+        if self.plan:
+            action = self.plan.pop(0)
+        else:
+            # No reachable food was found. Return a valid movement action
+            # rather than returning None.
+            action = 'Up'
+
+        self.last_action = action
+        return action
+
