@@ -13,8 +13,7 @@ class GreedyGridAgent:
 
 class SimpleReflexAgent:
     """
-    Simple Reflex Agent for Practical 02.
-
+    Simple Reflex Agent 
     The agent has no __init__ method and therefore does not
     maintain any history or memory.
 
@@ -37,52 +36,33 @@ class SimpleReflexAgent:
 
 class ModelBasedAgent:
     """
-    Model-Based Agent for Practical 02.
-
-    Maintains internal memory of:
-    - visited cells
-    - percept history
-    - action history
-    - previous percept
-    - previous action
-    - estimated position
-    - estimated direction
+    Model-Based Agent
+    The agent maintains internal memory of previous percepts,
+    actions, and visited cells. When the same percept is received
+    repeatedly, the agent changes its action to avoid repeating
+    the same behaviour.
     """
-
-    DIRECTIONS = ['Up', 'Right', 'Down', 'Left']
-
-    DELTAS = {
-        'Up': (0, 1),
-        'Right': (1, 0),
-        'Down': (0, -1),
-        'Left': (-1, 0)
-    }
 
     def __init__(self):
 
-        
         # Internal memory
         self.visited_cells = {(0, 0)}
-
         self.percept_history = []
-
         self.action_history = []
 
         self.last_percept = None
-
         self.last_action = None
 
-        # Estimated position and direction
+        # Estimated internal position
         self.estimated_position = [0, 0]
 
-        self.direction_index = 1  # Right
+        # Estimated facing direction
+        self.directions = ['Up', 'Right', 'Down', 'Left']
+        self.direction_index = 1  # Start facing Right
 
         # Used to detect repeated situations
         self.repeated_percept_count = 0
 
-        self.steps_without_progress = 0
-
-    # Helper Methods
     def _normalise_percept(self, percept):
 
         return (
@@ -90,83 +70,68 @@ class ModelBasedAgent:
             bool(percept.get('food_here', False))
         )
 
-    def _direction_after_left(self):
+    def _turn_left(self):
 
-        return (
+        self.direction_index = (
             self.direction_index - 1
         ) % 4
 
-    def _direction_after_right(self):
+    def _turn_right(self):
 
-        return (
+        self.direction_index = (
             self.direction_index + 1
         ) % 4
 
-    def _position_after_forward(self, direction_index):
+    def _update_internal_state(self, action):
 
-        direction = self.DIRECTIONS[
-            direction_index
-        ]
-
-        dx, dy = self.DELTAS[
-            direction
-        ]
-
-        return (
-            self.estimated_position[0] + dx,
-            self.estimated_position[1] + dy
-        )
-
-  
-    # Update Internal State
-    def _update_memory_after_action(self, action):
+        """
+        Update the internal model using the previous action.
+        """
 
         if action == 'Left':
 
-            self.direction_index = (
-                self._direction_after_left()
-            )
+            self._turn_left()
 
         elif action == 'Right':
 
-            self.direction_index = (
-                self._direction_after_right()
-            )
+            self._turn_right()
 
         elif action == 'Forward':
 
-            self.estimated_position = list(
-                self._position_after_forward(
-                    self.direction_index
-                )
-            )
+            direction = self.directions[
+                self.direction_index
+            ]
 
-   
-    # Sense and Act
-    def sense_and_act(self, percept: dict) -> str:
+            if direction == 'Up':
+                self.estimated_position[1] += 1
+
+            elif direction == 'Down':
+                self.estimated_position[1] -= 1
+
+            elif direction == 'Left':
+                self.estimated_position[0] -= 1
+
+            elif direction == 'Right':
+                self.estimated_position[0] += 1
+
+    def sense_and_act(self, percept):
 
         current_percept = self._normalise_percept(
             percept
         )
 
         
-        # Step 1:
-        # Update state using previous action.
+        # 1. Update internal state using previous action
         if self.last_action is not None:
 
-            self._update_memory_after_action(
+            self._update_internal_state(
                 self.last_action
             )
 
         
-        # Step 2:
-        # Record current state.
+        # 2. Record current state
         current_cell = tuple(
             self.estimated_position
-        )
-
-        already_visited = (
-            current_cell in self.visited_cells
         )
 
         self.visited_cells.add(
@@ -178,7 +143,7 @@ class ModelBasedAgent:
         )
 
         
-        # Detect repeated percept
+        # 3. Detect repeated percept
         if self.last_percept == current_percept:
 
             self.repeated_percept_count += 1
@@ -188,111 +153,49 @@ class ModelBasedAgent:
             self.repeated_percept_count = 0
 
         
-        # Detect repeated cell
-        if already_visited:
-
-            self.steps_without_progress += 1
-
-        else:
-
-            self.steps_without_progress = 0
-
-        
-        # Extract percept information
+        # 4. Condition-Action Rules
         wall_ahead = current_percept[0]
-
         food_here = current_percept[1]
 
         
-        # CONDITION-ACTION RULES + MEMORY
         # IF food is ahead THEN move forward.
         if food_here:
 
             action = 'Forward'
 
-        # IF wall is ahead:
+        elif self.repeated_percept_count >= 1:
+
+            if self.last_action == 'Left':
+
+                action = 'Right'
+
+            elif self.last_action == 'Right':
+
+                action = 'Left'
+
+            elif self.last_action == 'Forward':
+
+                action = 'Right'
+
+            else:
+
+                action = 'Left'
+
+        
+        # IF wall ahead THEN turn left.
         elif wall_ahead:
 
-            left_index = (
-                self._direction_after_left()
-            )
-
-            right_index = (
-                self._direction_after_right()
-            )
-
-            left_cell = (
-                self._position_after_forward(
-                    left_index
-                )
-            )
-
-            right_cell = (
-                self._position_after_forward(
-                    right_index
-                )
-            )
-
-            left_visited = (
-                left_cell in self.visited_cells
-            )
-
-            right_visited = (
-                right_cell in self.visited_cells
-            )
-
-            # IF wall ahead AND left is not visited
-            # THEN turn left.
-            if not left_visited:
-
-                action = 'Left'
-
-            # ELSE IF right is not visited
-            # THEN turn right.
-            elif not right_visited:
-
-                action = 'Right'
-
-            # ELSE change direction to escape the loop.
-            else:
-
-                action = 'Right'
+            action = 'Left'
 
         
-        # Repeated situation detected
-        elif (
-            self.repeated_percept_count >= 1
-            or self.steps_without_progress >= 2
-        ):
-
-            right_index = (
-                self._direction_after_right()
-            )
-
-            right_cell = (
-                self._position_after_forward(
-                    right_index
-                )
-            )
-
-            if right_cell not in self.visited_cells:
-
-                action = 'Right'
-
-            else:
-
-                action = 'Left'
-
-        
-        # Default action
+        # ELSE move forward.
         else:
 
             action = 'Forward'
 
         
-        # Store action in memory
+        # 5. Store the current decision in memory
         self.last_percept = current_percept
-
         self.last_action = action
 
         self.action_history.append(
@@ -300,8 +203,7 @@ class ModelBasedAgent:
         )
 
         return action
-
-
+    
 class SearchAgent:
     """Breadth-First Search agent for Practical 03."""
 
