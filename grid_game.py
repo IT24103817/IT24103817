@@ -5,7 +5,7 @@ class GridHuntGame:
     """
     The environment keeps the true state internally, but get_percept()
     exposes only the local information required for the partially
-    observable Practical 02 task.
+    observable tasks.
     """
 
     DIRECTIONS = {
@@ -48,7 +48,6 @@ class GridHuntGame:
     def get_percept(self) -> dict:
         """
         Return only the local percept.
-
         The agent does NOT receive agent_pos, score, remaining food,
         or any other global state.
         """
@@ -68,8 +67,6 @@ class GridHuntGame:
     def execute_action(self, action: str):
         """
         Convert the agent's relative action into an environment action.
-        FORWARD moves in the current facing direction.
-        LEFT/RIGHT turn the agent 90 degrees and move one cell.
         """
         self.steps += 1
 
