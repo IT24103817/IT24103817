@@ -2,66 +2,114 @@ import random
 
 
 class GridHuntGame:
-    """A small Pacman-style grid environment (4x4) where an agent collects food."""
+    """
+    The environment keeps the true state internally, but get_percept()
+    exposes only the local information required for the partially
+    observable Practical 02 task.
+    """
 
-    def __init__(self, width=4, height=4):
+    DIRECTIONS = {
+        'Up': (0, 1),
+        'Down': (0, -1),
+        'Left': (-1, 0),
+        'Right': (1, 0),
+    }
+
+    def __init__(self, width=8, height=8, seed=7, custom_walls=None, num_food=8):
         self.width = width
         self.height = height
-        self.agent_pos = [0, 0]  # Starting position (x, y)
+        self.agent_pos = [0, 0]
+        self.facing = 'Right'
 
-        # Place a few random food pellets and obstacles (walls)
-        self.food_positions = {
-            (1, 2),
-            (2, 3),
-            (3, 0),
-            (2, 1)
+        if seed is not None:
+            random.seed(seed)
+
+        self.walls = set(custom_walls) if custom_walls is not None else {
+            (2, 2), (2, 3), (5, 5), (6, 5), (3, 7)
         }
 
-        self.walls = {
-            (1, 1),
-            (2, 2)
-        }
+        self.food_positions = set()
+        while len(self.food_positions) < num_food:
+            pos = (random.randint(0, width - 1), random.randint(0, height - 1))
+            if pos != (0, 0) and pos not in self.walls:
+                self.food_positions.add(pos)
 
         self.score = 0
         self.steps = 0
+        self.collision = False
 
-    def get_percept(self, agent) -> dict:
+    def _ahead_position(self):
+        dx, dy = self.DIRECTIONS[self.facing]
+        return (
+            self.agent_pos[0] + dx,
+            self.agent_pos[1] + dy
+        )
+
+    def get_percept(self) -> dict:
+        """
+        Return only the local percept.
+
+        The agent does NOT receive agent_pos, score, remaining food,
+        or any other global state.
+        """
+        ahead = self._ahead_position()
+
+        wall_ahead = (
+            ahead[0] < 0 or ahead[0] >= self.width
+            or ahead[1] < 0 or ahead[1] >= self.height
+            or ahead in self.walls
+        )
+
         return {
-            'agent_pos': list(self.agent_pos),
-            'smells_food': tuple(self.agent_pos) in self.food_positions,
-            'hit_wall': tuple(self.agent_pos) in self.walls,
-            'score': self.score,
-            'remaining_food': len(self.food_positions)
+            'wall_ahead': wall_ahead,
+            'food_here': ahead in self.food_positions,
         }
 
-    def execute_action(self, agent, action: str):
+    def execute_action(self, action: str):
+        """
+        Convert the agent's relative action into an environment action.
+        FORWARD moves in the current facing direction.
+        LEFT/RIGHT turn the agent 90 degrees and move one cell.
+        """
         self.steps += 1
-        new_pos = list(self.agent_pos)
 
-        if action == 'Up':
-            new_pos[1] = min(self.height - 1, new_pos[1] + 1)
+        if action == 'FORWARD':
+            direction = self.facing
 
-        elif action == 'Down':
-            new_pos[1] = max(0, new_pos[1] - 1)
+        elif action == 'LEFT':
+            order = ['Up', 'Right', 'Down', 'Left']
+            direction = order[(order.index(self.facing) - 1) % 4]
+            self.facing = direction
 
-        elif action == 'Left':
-            new_pos[0] = max(0, new_pos[0] - 1)
+        elif action == 'RIGHT':
+            order = ['Up', 'Right', 'Down', 'Left']
+            direction = order[(order.index(self.facing) + 1) % 4]
+            self.facing = direction
 
-        elif action == 'Right':
-            new_pos[0] = min(self.width - 1, new_pos[0] + 1)
+        elif action in self.DIRECTIONS:
+            direction = action
+            self.facing = action
 
-        # Check collision with walls
+        else:
+            direction = self.facing
+
+        dx, dy = self.DIRECTIONS[direction]
+
+        new_pos = [
+            max(0, min(self.width - 1, self.agent_pos[0] + dx)),
+            max(0, min(self.height - 1, self.agent_pos[1] + dy)),
+        ]
+
         if tuple(new_pos) in self.walls:
-            self.score -= 5  # Penalty for hitting a wall
+            self.score -= 5
         else:
             self.agent_pos = new_pos
 
-        # Check if eating food
-        tuple_pos = tuple(self.agent_pos)
+        current = tuple(self.agent_pos)
 
-        if tuple_pos in self.food_positions:
-            self.food_positions.remove(tuple_pos)
-            self.score += 20  # Reward for eating food pellet
+        if current in self.food_positions:
+            self.food_positions.remove(current)
+            self.score += 20
 
-    def is_done(self) -> bool:
-        return len(self.food_positions) == 0 or self.steps >= 20
+    def is_done(self):
+        return len(self.food_positions) == 0 or self.steps >= 60 or self.collision
