@@ -5,7 +5,7 @@ from agent import SearchAgent
 
 
 class VisualGridHuntGame:
-    """Practical 03 visual environment for uninformed search."""
+    """Practical 04 visual environment with BFS, DFS, UCS and A* search."""
 
     DIRECTIONS = {
         'Up': (0, 1),
@@ -106,13 +106,13 @@ class GridGameGUI:
         self.agent = None
         self.running = False
 
-        self.root.title('SE3062 Practical 03 - Uninformed Search')
+        self.root.title('IT3012 Practical 04 - Informed Search')
         self.root.geometry('650x760')
         self.root.resizable(False, False)
 
         self.title_label = tk.Label(
             root,
-            text='Practical 03: Uninformed Search',
+            text='Practical 04: Informed Search',
             font=('Arial', 16, 'bold'),
             width=60,
             height=2,
@@ -170,6 +170,15 @@ class GridGameGUI:
         )
         self.ucs_button.pack(side=tk.LEFT, padx=4)
 
+        self.astar_button = tk.Button(
+            button_frame,
+            text='Run A*',
+            command=lambda: self.start_agent('AStar'),
+            font=('Arial', 10),
+            width=12,
+        )
+        self.astar_button.pack(side=tk.LEFT, padx=4)
+
         self.reset_button = tk.Button(
             button_frame,
             text='Reset',
@@ -195,9 +204,10 @@ class GridGameGUI:
         self.bfs_button.config(state='normal')
         self.dfs_button.config(state='normal')
         self.ucs_button.config(state='normal')
+        self.astar_button.config(state='normal')
 
         self.title_label.config(
-            text='Practical 03: Uninformed Search'
+            text='Practical 04 - Informed Search'
         )
 
         self.info_label.config(
@@ -220,9 +230,10 @@ class GridGameGUI:
         self.bfs_button.config(state='disabled')
         self.dfs_button.config(state='disabled')
         self.ucs_button.config(state='disabled')
+        self.astar_button.config(state='disabled')
 
         self.title_label.config(
-            text=f'Practical 03 - {algorithm}'
+            text=f'Practical 04 - {algorithm}'
         )
 
         self.info_label.config(
@@ -282,6 +293,7 @@ class GridGameGUI:
             self.bfs_button.config(state='normal')
             self.dfs_button.config(state='normal')
             self.ucs_button.config(state='normal')
+            self.astar_button.config(state='normal')
 
     def draw_grid(self):
         self.canvas.delete('all')
