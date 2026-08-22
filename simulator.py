@@ -1,4 +1,4 @@
-from agent import SimpleReflexAgent, ModelBasedAgent
+from agent import SimpleReflexAgent, ModelBasedAgent, SearchAgent
 from grid_game import GridHuntGame
 
 
@@ -44,3 +44,29 @@ if __name__ == '__main__':
     run_agent(SimpleReflexAgent(), 'Simple Reflex Agent')
     run_agent(ModelBasedAgent(), 'Model-Based Agent')
     demonstrate_memory()
+
+
+def run_search_agent(algorithm='AStar', seed=7):
+    """Run the SearchAgent with the selected search algorithm."""
+    env = GridHuntGame(seed=seed)
+    agent = SearchAgent()
+    agent.active_algo = algorithm
+
+    while not env.is_done():
+        percept = {
+            'grid_size': (env.width, env.height),
+            'walls': list(env.walls),
+            'all_food': list(env.food_positions),
+        }
+        action = agent.sense_and_act(percept)
+        env.execute_action(action)
+
+    print(
+        f"=== SearchAgent ({algorithm}) ===\n"
+        f"Final score: {env.score}; steps: {env.steps}; "
+        f"food left: {len(env.food_positions)}"
+    )
+
+
+if __name__ == '__main__':
+    run_search_agent('AStar')
