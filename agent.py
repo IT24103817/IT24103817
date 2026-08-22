@@ -1,5 +1,6 @@
 # agent.py
 import random
+import math
 import heapq
 from collections import deque
 
@@ -84,6 +85,43 @@ class SearchAgent:
                     heapq.heappush(frontier, (new_cost, counter, neighbor, path + [action]))
         return []
 
+    def manhattan_distance(self, pos, goal):
+        x1, y1 = pos
+        x2, y2 = goal
+        return abs(x1 - x2) + abs(y1 - y2)
+
+    def euclidean_distance(self, pos, goal):
+        x1, y1 = pos
+        x2, y2 = goal
+        return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+
+    def astar_search(self, start_pos, goal_pos, walls, grid_size, heuristic_type='manhattan'):
+        heuristic = self.manhattan_distance if heuristic_type == 'manhattan' else self.euclidean_distance
+
+        counter = 0
+        start_h = heuristic(start_pos, goal_pos)
+        frontier = [(start_h, 0, counter, start_pos, [])]
+        reached_states = set()
+
+        while frontier:
+            f_cost, g_cost, _, current_pos, path_taken = heapq.heappop(frontier)
+
+            if current_pos == goal_pos:
+                return path_taken
+
+            if current_pos in reached_states:
+                continue
+            reached_states.add(current_pos)
+
+            for action, neighbor in self.get_neighbors(current_pos, grid_size, walls):
+                if neighbor not in reached_states:
+                    g_new = g_cost + 1
+                    h_new = heuristic(neighbor, goal_pos)
+                    f_new = g_new + h_new
+                    counter += 1
+                    heapq.heappush(frontier, (f_new, g_new, counter, neighbor, path_taken + [action]))
+        return []
+
     def sense_and_act(self, percept):
         if not self.plan:
             start = tuple(percept['agent_pos'])
@@ -103,5 +141,14 @@ class SearchAgent:
                 self.plan = self.dfs_search(start, target, grid_size, walls)
             elif self.active_algo == 'UCS':
                 self.plan = self.ucs_search(start, target, grid_size, walls)
+            elif self.active_algo == 'AStar':
+                self.plan = self.astar_search(start, target, walls, grid_size, heuristic_type='manhattan')
 
         return self.plan.pop(0) if self.plan else 'STOP'
+
+
+if __name__ == "__main__":
+    agent = SearchAgent()
+    start_pos, goal_pos = (0, 0), (3, 4)
+    print(f"Manhattan distance {start_pos} -> {goal_pos}: {agent.manhattan_distance(start_pos, goal_pos)}")
+    print(f"Euclidean distance {start_pos} -> {goal_pos}: {agent.euclidean_distance(start_pos, goal_pos)}")

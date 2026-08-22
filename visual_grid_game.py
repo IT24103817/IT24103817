@@ -259,5 +259,5 @@ if __name__ == "__main__":
     root = tk.Tk()
     # Try a larger grid size like 12x12 with 15 food and 3 opponents!
     # Observation Task: switch active_algo between 'BFS', 'DFS', 'UCS' and re-run to compare paths.
-    app = GridGameGUI(root, width=12, height=12, num_food=15, num_opponents=0, active_algo='BFS')
+    app = GridGameGUI(root, width=12, height=12, num_food=15, num_opponents=0, active_algo='AStar')
     root.mainloop()
