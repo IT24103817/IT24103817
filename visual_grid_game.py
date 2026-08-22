@@ -73,7 +73,9 @@ class VisualGridHuntGame:
             "food_here": (x, y) in self.food_positions,
             "toxin_here": (x, y) in self.toxic_traps,
             "wall_ahead": wall_ahead,
-            "grid_size": (self.width, self.height)
+            "grid_size": (self.width, self.height),
+            "walls": list(self.walls),
+            "all_food": list(self.food_positions)
         }
     def execute_action(self, action: str):
         self.steps += 1
