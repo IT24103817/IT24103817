@@ -1,5 +1,6 @@
 from collections import deque
 import heapq
+import math
 
 
 class GreedyGridAgent:
@@ -206,9 +207,9 @@ class ModelBasedAgent:
         return action
     
 class SearchAgent:
-    """Goal-based planning agent
-    The agent plans a complete path to one food pellet using an
-    uninformed search strategy, then executes the stored plan one
+    """Goal-based planning agent.
+    The agent plans a complete path to one food pellet using the
+    selected search strategy, then executes the stored plan one
     action at a time.
     """
 
@@ -224,9 +225,6 @@ class SearchAgent:
         self.plan = []
         self.active_algo = 'BFS'
 
-        # The practical's environment starts the agent at (0, 0).
-        # We maintain an internal position model because the agent
-        # is not given agent_pos in the percept.
         self.estimated_position = [0, 0]
         self.last_action = None
 
@@ -320,8 +318,6 @@ class SearchAgent:
             if current == goal:
                 return path
 
-            # Reverse insertion so the first action in ACTIONS is
-            # explored first while the frontier remains a LIFO stack.
             for action, delta in reversed(self.ACTIONS):
                 next_position = self._successor(
                     current, delta, walls, grid_size
@@ -394,6 +390,81 @@ class SearchAgent:
 
         return None
 
+    def manhattan_distance(self, pos, goal):
+        """Return Manhattan distance for four-way grid movement."""
+        return abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])
+
+    def euclidean_distance(self, pos, goal):
+        """Return straight-line (Euclidean) distance between two positions."""
+        return math.sqrt(
+            (pos[0] - goal[0]) ** 2
+            + (pos[1] - goal[1]) ** 2
+        )
+
+    def astar_search(
+        self,
+        start_pos,
+        goal_pos,
+        walls,
+        grid_size,
+        heuristic_type='manhattan'
+    ):
+        """A* Search using f(n) = g(n) + h(n)."""
+
+        walls = self._normalise_walls(walls)
+        start = tuple(start_pos)
+        goal = tuple(goal_pos)
+
+        if not self._in_bounds(start, grid_size) or not self._in_bounds(goal, grid_size):
+            return None
+
+        if start in walls or goal in walls:
+            return None
+
+        if start == goal:
+            return []
+
+        if heuristic_type.lower() == 'euclidean':
+            heuristic = self.euclidean_distance
+        else:
+            heuristic = self.manhattan_distance
+
+        frontier = []
+        reached_states = set()
+
+        h_start = heuristic(start, goal)
+        heapq.heappush(frontier, (h_start, 0, start, []))
+
+        while frontier:
+            f_cost, g_cost, current_pos, path_taken = heapq.heappop(frontier)
+
+            if current_pos in reached_states:
+                continue
+
+            if current_pos == goal:
+                return path_taken
+
+            reached_states.add(current_pos)
+
+            for action, delta in self.ACTIONS:
+                next_position = self._successor(
+                    current_pos, delta, walls, grid_size
+                )
+
+                if next_position is None or next_position in reached_states:
+                    continue
+
+                new_g = g_cost + 1
+                new_h = heuristic(next_position, goal)
+                new_f = new_g + new_h
+
+                heapq.heappush(
+                    frontier,
+                    (new_f, new_g, next_position, path_taken + [action])
+                )
+
+        return None
+
     def _search(self, start_pos, goal_pos, walls, grid_size):
         """Run the search algorithm selected by active_algo."""
         if self.active_algo == 'DFS':
@@ -404,6 +475,15 @@ class SearchAgent:
         if self.active_algo == 'UCS':
             return self.ucs_search(
                 start_pos, goal_pos, walls, grid_size
+            )
+
+        if self.active_algo == 'AStar':
+            return self.astar_search(
+                start_pos,
+                goal_pos,
+                walls,
+                grid_size,
+                heuristic_type='manhattan'
             )
 
         # Default required by the practical.
@@ -452,8 +532,6 @@ class SearchAgent:
 
             start = tuple(self.estimated_position)
 
-            # "Closest" is measured by Manhattan distance, which is
-            # appropriate for the four-direction grid representation.
             goal = min(
                 all_food,
                 key=lambda food: (
@@ -472,10 +550,14 @@ class SearchAgent:
         if self.plan:
             action = self.plan.pop(0)
         else:
-            # No reachable food was found. Return a valid movement action
-            # rather than returning None.
             action = 'Up'
 
         self.last_action = action
         return action
 
+
+
+if __name__ == '__main__':
+    demo_agent = SearchAgent()
+    print("Manhattan (0,0) -> (3,4):", demo_agent.manhattan_distance((0, 0), (3, 4)))
+    print("Euclidean (0,0) -> (3,4):", demo_agent.euclidean_distance((0, 0), (3, 4)))
