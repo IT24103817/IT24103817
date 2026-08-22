@@ -105,6 +105,69 @@ class TestPractical3_SearchAgent(unittest.TestCase):
         self.assertTrue(is_empty_or_none, "BFS should return None or [] when the goal is unreachable.")
 
 
+
+
+class TestPractical4_AStar(unittest.TestCase):
+    """Tests for Practical 04: informed search and heuristic functions."""
+
+    def setUp(self):
+        self.agent = SearchAgent()
+
+    def test_manhattan_distance(self):
+        self.assertEqual(
+            self.agent.manhattan_distance((0, 0), (3, 4)),
+            7
+        )
+
+    def test_euclidean_distance(self):
+        self.assertAlmostEqual(
+            self.agent.euclidean_distance((0, 0), (3, 4)),
+            5.0
+        )
+
+    def test_astar_shortest_path(self):
+        grid_size = (4, 4)
+        start_pos = (0, 0)
+        goal_pos = (3, 3)
+        walls = [(1, 0), (2, 0), (0, 2), (1, 2), (2, 2)]
+
+        path = self.agent.astar_search(
+            start_pos,
+            goal_pos,
+            walls,
+            grid_size,
+            heuristic_type='manhattan'
+        )
+
+        self.assertIsNotNone(path)
+        self.assertEqual(len(path), 6)
+
+    def test_astar_unreachable_goal(self):
+        grid_size = (3, 3)
+        start_pos = (0, 0)
+        goal_pos = (2, 2)
+        walls = [(1, 2), (2, 1), (1, 1)]
+
+        path = self.agent.astar_search(
+            start_pos,
+            goal_pos,
+            walls,
+            grid_size
+        )
+
+        self.assertTrue(path is None or len(path) == 0)
+
+    def test_astar_dispatch(self):
+        self.agent.active_algo = 'AStar'
+        path = self.agent._search(
+            (0, 0),
+            (3, 3),
+            [(1, 0), (2, 0), (0, 2), (1, 2), (2, 2)],
+            (4, 4)
+        )
+        self.assertIsNotNone(path)
+        self.assertEqual(len(path), 6)
+
 if __name__ == '__main__':
     # Run the test suite
     print("=== IT3012: Intelligent Agents - Autograder Test Suite ===\n")
