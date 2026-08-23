@@ -2,6 +2,7 @@
 import random
 import heapq
 from collections import deque
+import math
 
 
 class GreedyGridAgent:
@@ -112,7 +113,13 @@ class SearchAgent:
             'Right': (1, 0),
         }
         self.plan = []
-        self.active_algo = 'BFS'
+        self.active_algo = 'AStar'
+
+    def manhattan_distance(self, pos, goal):
+        return abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])
+
+    def euclidean_distance(self, pos, goal):
+        return math.sqrt((pos[0] - goal[0])**2 + (pos[1] - goal[1])**2)
 
     def bfs_search(self, start_pos, goal_pos, walls, grid_size):
         start = tuple(start_pos)
@@ -192,6 +199,50 @@ class SearchAgent:
 
         return []
 
+    def astar_search(self, start_pos, goal_pos, walls, grid_size, heuristic_type='manhattan'):
+        start = tuple(start_pos)
+        goal = tuple(goal_pos)
+        wall_set = set(walls)
+        width, height = grid_size
+        
+        reached_states = set()
+        
+        # Priority queue stores (f_cost, g_cost, current_pos, path_taken)
+        # g_cost of initial state is 0
+        if heuristic_type == 'manhattan':
+            h_cost = self.manhattan_distance(start, goal)
+        else:
+            h_cost = self.euclidean_distance(start, goal)
+            
+        f_cost = 0 + h_cost
+        pq = [(f_cost, 0, start, [])]
+        
+        while pq:
+            f, g, (x, y), path = heapq.heappop(pq)
+            
+            if (x, y) == goal:
+                return path
+                
+            if (x, y) in reached_states:
+                continue
+            reached_states.add((x, y))
+            
+            for action, (dx, dy) in self.actions.items():
+                nx = x + dx
+                ny = y + dy
+                next_pos = (nx, ny)
+                
+                if 0 <= nx < width and 0 <= ny < height and next_pos not in wall_set and next_pos not in reached_states:
+                    g_new = g + 1
+                    if heuristic_type == 'manhattan':
+                        h_new = self.manhattan_distance(next_pos, goal)
+                    else:
+                        h_new = self.euclidean_distance(next_pos, goal)
+                    f_new = g_new + h_new
+                    heapq.heappush(pq, (f_new, g_new, next_pos, path + [action]))
+                    
+        return []
+
     def sense_and_act(self, percept: dict) -> str:
         if not self.plan:
             all_food = percept.get('all_food', [])
@@ -211,6 +262,8 @@ class SearchAgent:
                 self.plan = self.dfs_search(agent_pos, closest_food, walls, grid_size)
             elif self.active_algo == 'UCS':
                 self.plan = self.ucs_search(agent_pos, closest_food, walls, grid_size)
+            elif self.active_algo == 'AStar':
+                self.plan = self.astar_search(agent_pos, closest_food, walls, grid_size)
                 
             if not self.plan:
                 return 'Right'  # Fallback if no path is found
