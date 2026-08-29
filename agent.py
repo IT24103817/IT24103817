@@ -4,6 +4,8 @@ import math
 import heapq
 from collections import deque
 
+from logic_engine import KnowledgeBase
+
 
 class GreedyGridAgent:
     """A simple agent that tries to move around systematically to clear the grid."""
@@ -20,7 +22,11 @@ class GreedyGridAgent:
 class SearchAgent:
     def __init__(self, active_algo='BFS'):
         self.plan = []
-        self.active_algo = active_algo  # Options: 'BFS', 'DFS', 'UCS'
+        self.active_algo = active_algo  # Options: 'BFS', 'DFS', 'UCS', 'AStar'
+
+        self.kb = KnowledgeBase()
+        self.kb.tell_rule(['TargetVisible', 'HasDust'], 'SafeToEngage')
+        self.kb.tell_rule(['SafeToEngage', 'BloodseekerMissing'], 'Retreat')
 
     def get_neighbors(self, state, grid_size, walls):
         x, y = state
@@ -95,7 +101,24 @@ class SearchAgent:
         x2, y2 = goal
         return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
-    def astar_search(self, start_pos, goal_pos, walls, grid_size, heuristic_type='manhattan'):
+    def is_tile_feasible(self, tile, opponent_positions):
+        """Consult the Knowledge Base to check logical (not just physical) safety of a tile."""
+        self.kb.clear_facts()
+
+        tx, ty = tile
+        target_visible = any(abs(tx - ox) + abs(ty - oy) <= 1 for ox, oy in opponent_positions)
+        if target_visible:
+            self.kb.tell_fact('TargetVisible')
+
+        # This environment has no vision items or ally units, so these hold by default.
+        self.kb.tell_fact('HasDust')
+        self.kb.tell_fact('BloodseekerMissing')
+
+        self.kb.forward_chain()
+        return 'Retreat' not in self.kb.facts
+
+    def astar_search(self, start_pos, goal_pos, walls, grid_size, heuristic_type='manhattan', opponent_positions=None):
+        opponent_positions = opponent_positions or []
         heuristic = self.manhattan_distance if heuristic_type == 'manhattan' else self.euclidean_distance
 
         counter = 0
@@ -114,7 +137,7 @@ class SearchAgent:
             reached_states.add(current_pos)
 
             for action, neighbor in self.get_neighbors(current_pos, grid_size, walls):
-                if neighbor not in reached_states:
+                if neighbor not in reached_states and self.is_tile_feasible(neighbor, opponent_positions):
                     g_new = g_cost + 1
                     h_new = heuristic(neighbor, goal_pos)
                     f_new = g_new + h_new
@@ -142,7 +165,9 @@ class SearchAgent:
             elif self.active_algo == 'UCS':
                 self.plan = self.ucs_search(start, target, grid_size, walls)
             elif self.active_algo == 'AStar':
-                self.plan = self.astar_search(start, target, walls, grid_size, heuristic_type='manhattan')
+                opponent_positions = [tuple(op) for op in percept.get('opponent_positions', [])]
+                self.plan = self.astar_search(start, target, walls, grid_size, heuristic_type='manhattan',
+                                               opponent_positions=opponent_positions)
 
         return self.plan.pop(0) if self.plan else 'STOP'
 
