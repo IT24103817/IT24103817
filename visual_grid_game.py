@@ -77,7 +77,12 @@ class VisualGridHuntGame:
             'food_here': tuple(self.agent_pos) in self.food_positions,
             'collision': self.collision,
             'score': self.score,
-            'remaining_food': len(self.food_positions)
+            'remaining_food': len(self.food_positions),
+
+            #lab 3 - 1.1
+            'grid_size': (self.width, self.height),
+            'walls': list(self.walls),
+            'all_food': list(self.food_positions)
         }
 
     def execute_action(self, action: str):
@@ -223,8 +228,11 @@ class GridGameGUI:
 
     def run_loop(self):
         self.btn.config(state="disabled")
-        from agent import ModelBasedAgent
-        agent = ModelBasedAgent()
+        
+        # Instantiate SearchAgent and configure the algorithm here:
+        # Options: 'BFS', 'DFS', or 'UCS'
+        from agent import SearchAgent
+        agent = SearchAgent(active_algo='UCS')
 
         def step():
             if not self.env.is_done():
